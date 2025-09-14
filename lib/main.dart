@@ -5,7 +5,6 @@ import 'screens/splash_screen.dart';
 void main() {
   runApp(const CareerGuideApp());
 }
-
 class CareerGuideApp extends StatelessWidget {
   const CareerGuideApp({super.key});
 
