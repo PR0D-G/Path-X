@@ -1,19 +1,167 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher_string.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
+import '../models/job_model.dart';
+import '../providers/auth_provider.dart';
 
-class LearningPathScreen extends StatelessWidget {
-  final String jobTitle;
-  final List<String> missingSkills;
+class LearningPathScreen extends StatefulWidget {
+  const LearningPathScreen({super.key});
 
-  const LearningPathScreen({
-    super.key,
-    required this.jobTitle,
-    required this.missingSkills,
-  });
+  @override
+  State<LearningPathScreen> createState() => _LearningPathScreenState();
+}
 
-  // Sample learning resources - in a real app, this would come from an API
+class _LearningPathScreenState extends State<LearningPathScreen> {
+  late Job? job;
+  late List<String> missingSkills = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Get job from route arguments
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args =
+          ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+      if (args != null && args['job'] != null) {
+        setState(() {
+          job = args['job'] as Job;
+          // In a real app, calculate missing skills based on user's current skills
+          missingSkills = job?.coreSkills.take(3).toList() ?? [];
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+      }
+    });
+  }
+
+  // Get learning resources for the job
   Map<String, List<Map<String, dynamic>>> _getLearningResources() {
+    if (job == null) return {};
+
+    // Convert learning resources from job to the format expected by the UI
+    final resources = <String, List<Map<String, dynamic>>>{};
+
+    for (final resource in job!.learningResources) {
+      final platform = resource.platform;
+
+      // Handle resources with direct courses list
+      if (resource.courses != null) {
+        for (final course in resource.courses!) {
+          resources.putIfAbsent(platform, () => []).add({
+            'title': course,
+            'platform': platform,
+            'duration': 'Self-paced',
+            'level': 'Intermediate',
+            'url': resource.url ?? '',
+            'free':
+                !platform.toLowerCase().contains('udemy'), // Simple heuristic
+          });
+        }
+      }
+
+      // Handle resources with direct title and URL
+      if (resource.title != null && resource.url != null) {
+        resources.putIfAbsent(platform, () => []).add({
+          'title': resource.title!,
+          'platform': platform,
+          'duration': 'Self-paced',
+          'level': 'Intermediate',
+          'url': resource.url!,
+          'free': !platform.toLowerCase().contains('udemy'), // Simple heuristic
+        });
+      }
+    }
+
+    // If no resources found, return some default ones based on job role
+    if (resources.isEmpty) {
+      final jobTitle = job!.roleTitle.toLowerCase();
+      if (jobTitle.contains('flutter') || jobTitle.contains('mobile')) {
+        return _getFlutterResources();
+      } else if (jobTitle.contains('web') || jobTitle.contains('frontend')) {
+        return _getWebDevResources();
+      } else if (jobTitle.contains('data') || jobTitle.contains('analyst')) {
+        return _getDataScienceResources();
+      }
+      return _getGeneralResources();
+    }
+
+    return resources;
+  }
+
+  Map<String, List<Map<String, dynamic>>> _getFlutterResources() {
+    return {
+      'Flutter': [
+        {
+          'title': 'Flutter & Dart - The Complete Guide',
+          'platform': 'Udemy',
+          'duration': '45 hours',
+          'level': 'All Levels',
+          'url':
+              'https://www.udemy.com/course/learn-flutter-dart-to-build-ios-android-apps/',
+          'free': false,
+        },
+        {
+          'title': 'Flutter Tutorial for Beginners',
+          'platform': 'YouTube',
+          'duration': '6 hours',
+          'level': 'Beginner',
+          'url': 'https://www.youtube.com/watch?v=1ukSR1GRtMU',
+          'free': true,
+        },
+      ],
+    };
+  }
+
+  Map<String, List<Map<String, dynamic>>> _getWebDevResources() {
+    return {
+      'Web Development': [
+        {
+          'title': 'The Web Developer Bootcamp',
+          'platform': 'Udemy',
+          'duration': '63.5 hours',
+          'level': 'Beginner',
+          'url': 'https://www.udemy.com/course/the-web-developer-bootcamp/',
+          'free': false,
+        },
+        {
+          'title': 'HTML & CSS Full Course',
+          'platform': 'freeCodeCamp',
+          'duration': '11 hours',
+          'level': 'Beginner',
+          'url': 'https://www.freecodecamp.org/learn/responsive-web-design/',
+          'free': true,
+        },
+      ],
+    };
+  }
+
+  Map<String, List<Map<String, dynamic>>> _getDataScienceResources() {
+    return {
+      'Data Science': [
+        {
+          'title': 'Data Science Specialization',
+          'platform': 'Coursera',
+          'duration': '11 months',
+          'level': 'Beginner',
+          'url': 'https://www.coursera.org/specializations/jhu-data-science',
+          'free': false,
+        },
+        {
+          'title': 'Python for Data Science',
+          'platform': 'edX',
+          'duration': '12 weeks',
+          'level': 'Beginner',
+          'url': 'https://www.edx.org/course/python-for-data-science',
+          'free': true,
+        },
+      ],
+    };
+  }
+
+  Map<String, List<Map<String, dynamic>>> _getGeneralResources() {
     return {
       'Dart': [
         {
@@ -91,195 +239,253 @@ class LearningPathScreen extends StatelessWidget {
     };
   }
 
-  // Launch URL
-  void _launchURL(String url) async {
-    if (await canLaunchUrlString(url)) {
-      await launchUrlString(url);
-    } else {
-      throw 'Could not launch $url';
+  // Launch URL in browser
+  Future<void> _launchURL(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not launch $url')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final learningResources = _getLearningResources();
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Learning Path'),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black87,
+          elevation: 0,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Learning Path'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Text(
-              'Become a $jobTitle',
-              style: GoogleFonts.poppins(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color: Colors.blue.shade900,
-              ),
+    if (job == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Learning Path'),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black87,
+          elevation: 0,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'No job selected. Please go back and select a job first.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 16),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Master these skills to become job-ready',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            const SizedBox(height: 24),
+          ),
+        ),
+      );
+    }
 
-            // Learning Path Progress
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Your Learning Progress',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+    final resources = _getLearningResources();
+    final hasResources = resources.isNotEmpty;
+
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Learning Path'),
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Job Overview Card
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          job!.roleTitle,
+                          style: GoogleFonts.poppins(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (job!.education.isNotEmpty) ...[
+                          Text(
+                            'Education: ${job!.education}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                        if (job!.averageSalary.isNotEmpty) ...[
+                          Text(
+                            'Avg. Salary: ${job!.averageSalary} LPA',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: Colors.green[700],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                        if (job!.jobGrowthOutlook.isNotEmpty) ...[
+                          Text(
+                            'Growth Outlook: ${job!.jobGrowthOutlook}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: Colors.blue[700],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        if (job!.coreSkills.isNotEmpty) ...[
+                          Text(
+                            'Key Skills:',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: job!.coreSkills
+                                .take(5)
+                                .map(
+                                  (skill) => Chip(
+                                    label: Text(
+                                      skill,
+                                      style: GoogleFonts.poppins(fontSize: 11),
+                                    ),
+                                    backgroundColor: Colors.blue.shade50,
+                                    labelStyle: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      color: Colors.blue.shade800,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    ...missingSkills
-                        .map((skill) => _buildSkillProgress(skill))
-                        .toList(),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Recommended Resources
-            Text(
-              'Recommended Learning Resources',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.blue.shade900,
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Resources for each missing skill
-            ...missingSkills.expand((skill) {
-              final resources = learningResources[skill] ?? [];
-              if (resources.isEmpty) return <Widget>[];
-
-              return [
-                const SizedBox(height: 8),
-                Text(
-                  'For $skill:',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 8),
-                ...resources
-                    .map((resource) => _buildResourceCard(resource))
-                    .toList(),
-                const SizedBox(height: 8),
-              ];
-            }).toList(),
+                const SizedBox(height: 24),
+                !hasResources
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            'No learning resources available for ${job!.roleTitle} at the moment.\nCheck back later!',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.poppins(fontSize: 16),
+                          ),
+                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Recommended Resources
+                          Text(
+                            'Recommended Learning Resources',
+                            style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blue.shade900,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Resources for each missing skill
+                          ...missingSkills.expand((skill) {
+                            final resources =
+                                _getLearningResources()[skill] ?? [];
+                            if (resources.isEmpty) return <Widget>[];
 
-            const SizedBox(height: 24),
-
-            // Additional Resources
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Additional Learning Platforms',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                            return [
+                              const SizedBox(height: 8),
+                              Text(
+                                'For $skill:',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              ...resources.map(
+                                  (resource) => _buildResourceCard(resource)),
+                              const SizedBox(height: 8),
+                            ];
+                          }),
+                          const SizedBox(height: 24),
+                          // Additional Resources
+                          Card(
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Additional Learning Platforms',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildAdditionalResource(
+                                    'Coursera',
+                                    'Access courses from top universities and companies',
+                                    'https://www.coursera.org',
+                                  ),
+                                  _buildAdditionalResource(
+                                    'edX',
+                                    'Online courses from the world\'s best universities',
+                                    'https://www.edx.org',
+                                  ),
+                                  _buildAdditionalResource(
+                                    'NPTEL',
+                                    'Free online courses from IITs and IISc',
+                                    'https://nptel.ac.in',
+                                  ),
+                                  _buildAdditionalResource(
+                                    'freeCodeCamp',
+                                    'Learn to code for free',
+                                    'https://www.freecodecamp.org',
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildAdditionalResource(
-                      'Coursera',
-                      'Access courses from top universities and companies',
-                      'https://www.coursera.org',
-                    ),
-                    _buildAdditionalResource(
-                      'edX',
-                      'Online courses from the world\'s best universities',
-                      'https://www.edx.org',
-                    ),
-                    _buildAdditionalResource(
-                      'NPTEL',
-                      'Free online courses from IITs and IISc',
-                      'https://nptel.ac.in',
-                    ),
-                    _buildAdditionalResource(
-                      'freeCodeCamp',
-                      'Learn to code for free',
-                      'https://www.freecodecamp.org',
-                    ),
-                  ],
-                ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSkillProgress(String skill) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                skill,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Text(
-                '0%',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            ],
           ),
-          const SizedBox(height: 4),
-          LinearProgressIndicator(
-            value: 0.0,
-            backgroundColor: Colors.grey.shade200,
-            valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-            minHeight: 6,
-            borderRadius: BorderRadius.circular(3),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

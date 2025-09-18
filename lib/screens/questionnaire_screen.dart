@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 import 'job_recommendations_screen.dart';
 
 class QuestionnaireScreen extends StatefulWidget {
@@ -75,7 +77,8 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     super.dispose();
   }
 
-  void _answerQuestion(double rating) {
+  void _answerQuestion(double rating) async {
+    // Added async
     setState(() {
       _answers[_currentQuestionIndex] = rating;
     });
@@ -86,84 +89,96 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      // Calculate the final score
-      double totalScore = _answers.values.reduce((a, b) => a + b);
-      double averageScore = totalScore / _questions.length;
+      // All questions answered, process and navigate
+      try {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        await authProvider.completeQuestionnaire(); // Ensured await
 
-      // Determine skill level based on average score
-      String skillLevel;
-      if (averageScore < 2.0) {
-        skillLevel = 'Beginner';
-      } else if (averageScore < 3.5) {
-        skillLevel = 'Intermediate';
-      } else {
-        skillLevel = 'Advanced';
+        if (mounted) {
+          // Navigate to recommendations screen, replacing the current screen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => JobRecommendationsScreen(
+                // name: widget.name, // These were causing errors before, JobRecommendationsScreen doesn't expect them
+                // educationLevel: widget.educationLevel,
+                // skills: widget.skills,
+                // interests: widget.interests,
+                // skillLevel: '', // Passing empty string for now
+                assessmentResults: _answers,
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text(
+                    'Failed to save questionnaire results. Please try again.')),
+          );
+        }
       }
-
-      // Navigate to results screen
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => JobRecommendationsScreen(
-            name: widget.name,
-            educationLevel: widget.educationLevel,
-            skills: widget.skills,
-            interests: widget.interests,
-            skillLevel: skillLevel,
-            assessmentResults: _answers,
-          ),
-        ),
-      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Skills Assessment'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0, top: 16.0),
-            child: Text(
-              '${_currentQuestionIndex + 1}/${_questions.length}',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w500,
-                color: Colors.blue.shade800,
+    return Consumer<AuthProvider>(builder: (context, authProvider, _) {
+      if (authProvider.isLoading) {
+        return const Scaffold(
+          body: Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Skills Assessment'),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0, top: 16.0),
+              child: Text(
+                '\${_currentQuestionIndex + 1}/\${_questions.length}',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w500,
+                  color: Colors.blue.shade800,
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Progress Bar
-          LinearProgressIndicator(
-            value: (_currentQuestionIndex + 1) / _questions.length,
-            backgroundColor: Colors.grey.shade200,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
-            minHeight: 4,
-          ),
-
-          // Questions
-          Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _questions.length,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentQuestionIndex = index;
-                });
-              },
-              itemBuilder: (context, index) {
-                return _buildQuestionCard(index);
-              },
+          ],
+        ),
+        body: Column(
+          children: [
+            // Progress Bar
+            LinearProgressIndicator(
+              value: (_currentQuestionIndex + 1) / _questions.length,
+              backgroundColor: Colors.grey.shade200,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
+              minHeight: 4,
             ),
-          ),
-        ],
-      ),
-    );
+
+            // Questions
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _questions.length,
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentQuestionIndex = index;
+                  });
+                },
+                itemBuilder: (context, index) {
+                  return _buildQuestionCard(index);
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildQuestionCard(int questionIndex) {
