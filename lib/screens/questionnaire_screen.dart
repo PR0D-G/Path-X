@@ -6,17 +6,17 @@ import '../providers/auth_provider.dart';
 import 'job_recommendations_screen.dart';
 
 class QuestionnaireScreen extends StatefulWidget {
-  final String name;
-  final String educationLevel;
-  final List<String> skills;
-  final String interests;
+  final String? name;
+  final String? educationLevel;
+  final List<String>? skills;
+  final String? interests;
 
   const QuestionnaireScreen({
     super.key,
-    required this.name,
-    required this.educationLevel,
-    required this.skills,
-    required this.interests,
+    this.name,
+    this.educationLevel,
+    this.skills,
+    this.interests,
   });
 
   @override
@@ -27,6 +27,35 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   int _currentQuestionIndex = 0;
   final Map<int, double> _answers = {};
   final PageController _pageController = PageController();
+  
+  // Form controllers for user information
+  late final TextEditingController _nameController;
+  late final TextEditingController _educationController;
+  late final TextEditingController _skillsController;
+  late final TextEditingController _interestsController;
+  
+  // Track if we're showing the info form or questions
+  bool _showInfoForm = true;
+  
+  // Initialize controllers with widget values if they exist
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.name ?? '');
+    _educationController = TextEditingController(text: widget.educationLevel ?? '');
+    _skillsController = TextEditingController(text: widget.skills?.join(', ') ?? '');
+    _interestsController = TextEditingController(text: widget.interests ?? '');
+  }
+  
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _educationController.dispose();
+    _skillsController.dispose();
+    _interestsController.dispose();
+    _pageController.dispose();
+    super.dispose();
+  }
 
   final List<Map<String, dynamic>> _questions = [
     {
@@ -71,11 +100,6 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     },
   ];
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
 
   void _answerQuestion(double rating) async {
     // Added async
@@ -142,7 +166,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
             Padding(
               padding: const EdgeInsets.only(right: 16.0, top: 16.0),
               child: Text(
-                '\${_currentQuestionIndex + 1}/\${_questions.length}',
+                '${_currentQuestionIndex + 1}/${_questions.length}',
                 style: GoogleFonts.poppins(
                   fontWeight: FontWeight.w500,
                   color: Colors.blue.shade800,
@@ -151,36 +175,134 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
             ),
           ],
         ),
-        body: Column(
-          children: [
-            // Progress Bar
-            LinearProgressIndicator(
-              value: (_currentQuestionIndex + 1) / _questions.length,
-              backgroundColor: Colors.grey.shade200,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
-              minHeight: 4,
-            ),
+        body: _showInfoForm 
+          ? _buildInfoForm() 
+          : Column(
+              children: [
+                // Progress Bar
+                LinearProgressIndicator(
+                  value: (_currentQuestionIndex + 1) / _questions.length,
+                  backgroundColor: Colors.grey.shade200,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
+                  minHeight: 4,
+                ),
 
-            // Questions
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _questions.length,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentQuestionIndex = index;
-                  });
-                },
-                itemBuilder: (context, index) {
-                  return _buildQuestionCard(index);
-                },
-              ),
+                // Questions
+                Expanded(
+                  child: PageView.builder(
+                    controller: _pageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _questions.length,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentQuestionIndex = index;
+                      });
+                    },
+                    itemBuilder: (context, index) {
+                      return _buildQuestionCard(index);
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
       );
     });
+  }
+
+  Widget _buildInfoForm() {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Tell us about yourself',
+            style: GoogleFonts.poppins(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              color: Colors.blue.shade800,
+            ),
+          ),
+          const SizedBox(height: 32),
+          
+          // Name Field
+          TextFormField(
+            controller: _nameController,
+            decoration: InputDecoration(
+              labelText: 'Full Name',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // Education Level Field
+          TextFormField(
+            controller: _educationController,
+            decoration: InputDecoration(
+              labelText: 'Highest Education Level',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // Skills Field
+          TextFormField(
+            controller: _skillsController,
+            decoration: InputDecoration(
+              labelText: 'Skills (comma separated)',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 16),
+          
+          // Interests Field
+          TextFormField(
+            controller: _interestsController,
+            decoration: InputDecoration(
+              labelText: 'Career Interests',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 32),
+          
+          // Start Assessment Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _showInfoForm = false;
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                backgroundColor: Colors.blue.shade600,
+              ),
+              child: Text(
+                'Start Assessment',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildQuestionCard(int questionIndex) {

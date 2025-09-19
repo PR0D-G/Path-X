@@ -1,78 +1,62 @@
+import 'package:career_guide/screens/auth/login_screen.dart';
+import 'package:career_guide/screens/user_check_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-
-import 'providers/auth_provider.dart';
-import 'screens/splash_screen.dart';
-import 'screens/auth/login_screen.dart';
-import 'screens/auth/signup_screen.dart';
-import 'screens/home_screen.dart';
-import 'screens/questionnaire_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'firebase_options.dart';
 import 'screens/job_recommendations_screen.dart';
-import 'screens/profile_screen.dart';
-import 'screens/learning_path_screen.dart';
+import 'package:career_guide/screens/auth/login_screen.dart';
+import 'package:career_guide/screens/user_check_screen.dart';
 
-// Make the main function asynchronous to initialize Firebase
 void main() async {
-  // Ensure that Flutter bindings are initialized before calling Firebase
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-
-  runApp(const CareerGuideApp());
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  runApp(const MyApp());
 }
 
-class CareerGuideApp extends StatelessWidget {
-  const CareerGuideApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Wrap your app with MultiProvider to provide the Auth state
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(
-          create: (_) => AppAuthProvider(), // ✅ updated provider class
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'PathX',
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color.fromRGBO(0, 0, 0, 1),
+      ),
+      home: Scaffold(
+        body: StreamBuilder(
+          stream: FirebaseAuth.instance.authStateChanges(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.active) {
+              // If the snapshot has data, it means we have a user
+              if (snapshot.hasData) {
+                // *** THIS IS THE CHANGED LINE ***
+                // Instead of going to recommendations, go to the checker screen.
+                return const UserCheckScreen();
+              }
+              // If there's an error with the stream
+              else if (snapshot.hasError) {
+                return Center(
+                  child: Text('${snapshot.error}'),
+                );
+              }
+            }
+            // While waiting for connection, show a loading indicator
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            }
+            // If none of the above, user is not logged in, show LoginScreen
+            return const LoginScreen();
+          },
         ),
-        // You can add more providers here later
-      ],
-      child: MaterialApp(
-        title: 'Career Guide',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-          textTheme: GoogleFonts.poppinsTextTheme(
-            Theme.of(context).textTheme,
-          ),
-          appBarTheme: const AppBarTheme(
-            elevation: 0,
-            centerTitle: true,
-            backgroundColor: Colors.transparent,
-            iconTheme: IconThemeData(color: Colors.black87),
-            titleTextStyle: TextStyle(
-              color: Colors.black87,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        initialRoute: '/',
-        routes: {
-          '/': (context) => const SplashScreen(),
-          '/login': (context) => const LoginScreen(),
-          '/signup': (context) => const SignupScreen(),
-          '/home': (context) => const HomeScreen(),
-          '/questionnaire': (context) => const QuestionnaireScreen(
-                name: "",
-                educationLevel: "",
-                skills: [],
-                interests: "",
-              ),
-          '/job-recommendations': (context) =>
-              const JobRecommendationsScreen(assessmentResults: {}),
-          '/profile': (context) => const ProfileScreen(),
-          '/learning-path': (context) => const LearningPathScreen(),
-        },
       ),
     );
   }
