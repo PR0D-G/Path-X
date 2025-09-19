@@ -37,43 +37,82 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
     });
   }
 
-  // Get learning resources for the job
+  // Get learning resources for the job with fallbacks
   Map<String, List<Map<String, dynamic>>> _getLearningResources() {
-    if (job == null) return {};
-
-    // Convert learning resources from job to the format expected by the UI
     final resources = <String, List<Map<String, dynamic>>>{};
-
-    for (final resource in job!.learningResources) {
-      final platform = resource.platform;
-
-      // Handle resources with direct courses list
-      if (resource.courses != null) {
-        for (final course in resource.courses!) {
+    
+    // Add job-specific resources if available
+    if (job != null) {
+      // First try to get resources from job's learningResources
+      if (job!.learningResources.isNotEmpty) {
+        for (final resource in job!.learningResources) {
+          final platform = resource.platform.isNotEmpty ? resource.platform : 'General';
+          
+          // Handle resources with direct courses list
+          if (resource.courses != null && resource.courses!.isNotEmpty) {
+            for (final course in resource.courses!) {
+              if (course.trim().isNotEmpty) {
+                resources.putIfAbsent(platform, () => []).add({
+                  'title': course,
+                  'platform': platform,
+                  'duration': 'Self-paced',
+                  'level': 'Intermediate',
+                  'url': resource.url?.isNotEmpty == true ? resource.url! : 'https://www.google.com/search?q=${Uri.encodeComponent('$course $platform course')}',
+                  'free': !platform.toLowerCase().contains('udemy'),
+                });
+              }
+            }
+          } 
+          // Handle single resource with title and URL
+          else if (resource.title?.isNotEmpty == true) {
+            resources.putIfAbsent(platform, () => []).add({
+              'title': resource.title!,
+              'platform': platform,
+              'duration': 'Self-paced',
+              'level': 'Intermediate',
+              'url': resource.url?.isNotEmpty == true ? resource.url! : 'https://www.google.com/search?q=${Uri.encodeComponent('${resource.title} $platform')}',
+              'free': !platform.toLowerCase().contains('udemy'),
+            });
+          }
+        }
+      }
+      
+      // If still no resources, try to generate some based on job title and core skills
+      if (resources.isEmpty) {
+        final jobTitle = job!.roleTitle.toLowerCase();
+        
+        // Add resources based on job title
+        if (jobTitle.contains('flutter') || jobTitle.contains('mobile')) {
+          return _getFlutterResources();
+        } else if (jobTitle.contains('web') || jobTitle.contains('frontend')) {
+          return _getWebDevResources();
+        } else if (jobTitle.contains('data') || jobTitle.contains('analyst')) {
+          return _getDataScienceResources();
+        }
+        
+        // Add resources based on core skills if no specific match found
+        for (final skill in job!.coreSkills.take(3)) {
+          final platform = 'General';
+          final skillLower = skill.toLowerCase();
+          
           resources.putIfAbsent(platform, () => []).add({
-            'title': course,
+            'title': 'Learn $skill',
             'platform': platform,
             'duration': 'Self-paced',
-            'level': 'Intermediate',
-            'url': resource.url ?? '',
-            'free':
-                !platform.toLowerCase().contains('udemy'), // Simple heuristic
+            'level': 'Beginner to Advanced',
+            'url': 'https://www.google.com/search?q=${Uri.encodeComponent('learn $skill online course')}',
+            'free': true,
           });
         }
       }
-
-      // Handle resources with direct title and URL
-      if (resource.title != null && resource.url != null) {
-        resources.putIfAbsent(platform, () => []).add({
-          'title': resource.title!,
-          'platform': platform,
-          'duration': 'Self-paced',
-          'level': 'Intermediate',
-          'url': resource.url!,
-          'free': !platform.toLowerCase().contains('udemy'), // Simple heuristic
-        });
-      }
     }
+    
+    // If still no resources, return general resources
+    if (resources.isEmpty) {
+      return _getGeneralResources();
+    }
+    
+    return resources;
 
     // If no resources found, return some default ones based on job role
     if (resources.isEmpty) {
@@ -241,15 +280,19 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
 
   // Launch URL in browser
   Future<void> _launchURL(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(
+    try {
+      final uri = Uri.parse(url);
+      if (!await launchUrl(
         uri,
         mode: LaunchMode.externalApplication,
-      );
-    } else if (mounted) {
+        webOnlyWindowName: '_blank',
+      )) {
+        throw Exception('Could not launch $url');
+      }
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not launch $url')),
+        SnackBar(content: Text('Could not launch URL: $e')),
       );
     }
   }
@@ -292,7 +335,7 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
     final resources = _getLearningResources();
     final hasResources = resources.isNotEmpty;
 
-    return Consumer<AuthProvider>(
+    return Consumer<AppAuthProvider>(
       builder: (context, authProvider, _) {
         return Scaffold(
           appBar: AppBar(
@@ -414,24 +457,25 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          // Resources for each missing skill
-                          ...missingSkills.expand((skill) {
-                            final resources =
-                                _getLearningResources()[skill] ?? [];
-                            if (resources.isEmpty) return <Widget>[];
+                          // Display all learning resources by platform
+                          ...resources.entries.expand((entry) {
+                            final platform = entry.key;
+                            final platformResources = entry.value;
+                            if (platformResources.isEmpty) return <Widget>[];
 
                             return [
                               const SizedBox(height: 8),
                               Text(
-                                'For $skill:',
+                                platform,
                                 style: GoogleFonts.poppins(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              ...resources.map(
-                                  (resource) => _buildResourceCard(resource)),
+                              ...platformResources.map(
+                                (resource) => _buildResourceCard(resource),
+                              ),
                               const SizedBox(height: 8),
                             ];
                           }),

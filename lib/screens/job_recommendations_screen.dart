@@ -6,7 +6,12 @@ import '../providers/auth_provider.dart';
 import '../services/job_service.dart';
 
 class JobRecommendationsScreen extends StatefulWidget {
-  const JobRecommendationsScreen({super.key});
+  final Map<String, dynamic> assessmentResults;
+
+  const JobRecommendationsScreen({
+    super.key,
+    required this.assessmentResults,
+  });
 
   @override
   State<JobRecommendationsScreen> createState() =>
@@ -14,6 +19,14 @@ class JobRecommendationsScreen extends StatefulWidget {
 }
 
 class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
+  // Filter jobs based on assessment results
+  List<Job> _filterJobsByAssessment(
+      List<Job> jobs, Map<String, dynamic> assessmentResults) {
+    // For now, return all jobs. You can implement custom filtering logic here
+    // based on the assessmentResults to show more relevant jobs
+    return jobs;
+  }
+
   late Future<List<Job>> _jobsFuture;
   // final JobService _jobService = JobService(); // Unused
 
@@ -26,8 +39,13 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
   Future<void> _loadJobs() async {
     try {
       final jobs = await JobService.getJobs();
+
+      // Filter jobs based on assessment results
+      final filteredJobs =
+          _filterJobsByAssessment(jobs, widget.assessmentResults);
+
       setState(() {
-        _jobsFuture = Future.value(jobs);
+        _jobsFuture = Future.value(filteredJobs);
       });
     } catch (e) {
       // Handle error
@@ -40,7 +58,7 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
   // Calculate match percentage based on skills
   int _calculateMatchPercentage(Job job, [List<String>? userSkills]) {
     // Get user skills from auth provider if not provided
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
     final skills = userSkills ?? authProvider.userProfile?.skills ?? [];
 
     // Avoid division by zero if a job has no core skills listed
@@ -59,7 +77,7 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
 
   // Calculate matching skills for a job
   List<String> _getMatchingSkills(Job job, [List<String>? userSkills]) {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
     final skills = userSkills ?? authProvider.userProfile?.skills ?? [];
     final userSkillsLower = skills.map((s) => s.toLowerCase()).toSet();
     return job.coreSkills
@@ -69,7 +87,7 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
 
   // Calculate missing skills for a job
   List<String> _getMissingSkills(Job job, [List<String>? userSkills]) {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
     final skills = userSkills ?? authProvider.userProfile?.skills ?? [];
     final userSkillsLower = skills.map((s) => s.toLowerCase()).toSet();
     return job.coreSkills
@@ -83,55 +101,6 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
     if (score >= 0.6) return Colors.orange;
     return Colors.red;
   }
-
-  // Handle job tap
-  // void _onJobTap(Job job) { // Unused
-  //   showModalBottomSheet(
-  //     context: context,
-  //     shape: const RoundedRectangleBorder(
-  //       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-  //     ),
-  //     builder: (context) => Container(
-  //       padding: const EdgeInsets.all(20),
-  //       child: Column(
-  //         mainAxisSize: MainAxisSize.min,
-  //         children: [
-  //           Text(
-  //             'What would you like to do?',
-  //             style: GoogleFonts.poppins(
-  //               fontSize: 18,
-  //               fontWeight: FontWeight.bold,
-  //             ),
-  //           ),
-  //           const SizedBox(height: 20),
-  //           ElevatedButton(
-  //             onPressed: () {
-  //               Navigator.pop(context);
-  //               Navigator.pushNamed(
-  //                 context,
-  //                 '/profile',
-  //                 arguments: {'job': job},
-  //               );
-  //             },
-  //             child: const Text('View Job Profile'),
-  //           ),
-  //           const SizedBox(height: 10),
-  //           OutlinedButton(
-  //             onPressed: () {
-  //               Navigator.pop(context);
-  //               Navigator.pushNamed(
-  //                 context,
-  //                 '/learning-path',
-  //                 arguments: {'job': job},
-  //               );
-  //             },
-  //             child: const Text('View Learning Path'),
-  //           ),
-  //         ],
-  //       ),
-  //     ),
-  //   );
-  // }
 
   // Build a detail row for job information
   Widget _buildDetailRow(String label, String value) {
@@ -169,7 +138,7 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(
-            'Job Recommendations',
+            '',
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.w600,
               fontSize: 20,
@@ -202,7 +171,7 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
 
   // Sort jobs by match percentage (highest first)
   List<Job> _sortJobsByMatch(List<Job> jobs) {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
     final userSkills = authProvider.userProfile?.skills ?? [];
 
     jobs.sort((a, b) {
@@ -465,7 +434,7 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
   }
 
   Widget _buildProfileInfoCard() {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
     final userProfile = authProvider.userProfile;
 
     return Card(
@@ -501,7 +470,7 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
   }
 
   Widget _buildSkillsCard() {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
     final skills = authProvider.userProfile?.skills ?? [];
 
     return Card(
@@ -550,7 +519,7 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
   }
 
   Widget _buildAssessmentResultsCard() {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
     final assessmentResults = authProvider.userProfile?.assessmentResults ?? {};
 
     if (assessmentResults.isEmpty) {

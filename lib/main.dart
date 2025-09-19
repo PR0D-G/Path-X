@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:path_x/providers/auth_provider.dart';
-import 'package:path_x/screens/splash_screen.dart';
-import 'package:path_x/screens/auth/login_screen.dart';
-import 'package:path_x/screens/auth/signup_screen.dart';
-import 'package:path_x/screens/home_screen.dart';
-import 'package:path_x/screens/questionnaire_screen.dart';
-import 'package:path_x/screens/job_recommendations_screen.dart';
-import 'package:path_x/screens/profile_screen.dart';
-import 'package:path_x/screens/learning_path_screen.dart';
+
+import 'providers/auth_provider.dart';
+import 'screens/splash_screen.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/auth/signup_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/questionnaire_screen.dart';
+import 'screens/job_recommendations_screen.dart';
+import 'screens/profile_screen.dart';
+import 'screens/learning_path_screen.dart';
 
 // Make the main function asynchronous to initialize Firebase
 void main() async {
@@ -30,7 +31,7 @@ class CareerGuideApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
-          create: (_) => AuthProvider(),
+          create: (_) => AppAuthProvider(), // ✅ updated provider class
         ),
         // You can add more providers here later
       ],
@@ -61,8 +62,14 @@ class CareerGuideApp extends StatelessWidget {
           '/login': (context) => const LoginScreen(),
           '/signup': (context) => const SignupScreen(),
           '/home': (context) => const HomeScreen(),
-          '/questionnaire': (context) => const QuestionnaireScreen(),
-          '/job-recommendations': (context) => const JobRecommendationsScreen(),
+          '/questionnaire': (context) => const QuestionnaireScreen(
+                name: "",
+                educationLevel: "",
+                skills: [],
+                interests: "",
+              ),
+          '/job-recommendations': (context) =>
+              const JobRecommendationsScreen(assessmentResults: {}),
           '/profile': (context) => const ProfileScreen(),
           '/learning-path': (context) => const LearningPathScreen(),
         },

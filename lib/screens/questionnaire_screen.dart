@@ -91,7 +91,8 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     } else {
       // All questions answered, process and navigate
       try {
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final authProvider =
+            Provider.of<AppAuthProvider>(context, listen: false);
         await authProvider.completeQuestionnaire(); // Ensured await
 
         if (mounted) {
@@ -105,7 +106,8 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                 // skills: widget.skills,
                 // interests: widget.interests,
                 // skillLevel: '', // Passing empty string for now
-                assessmentResults: _answers,
+                assessmentResults: _answers
+                    .map((key, value) => MapEntry(key.toString(), value)),
               ),
             ),
           );
@@ -124,7 +126,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(builder: (context, authProvider, _) {
+    return Consumer<AppAuthProvider>(builder: (context, authProvider, _) {
       if (authProvider.isLoading) {
         return const Scaffold(
           body: Center(

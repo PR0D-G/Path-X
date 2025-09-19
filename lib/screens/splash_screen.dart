@@ -51,7 +51,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
+    return Consumer<AppAuthProvider>(
       builder: (context, authProvider, child) {
         // Schedule navigation to happen after the UI is built
         WidgetsBinding.instance.addPostFrameCallback((_) async {
