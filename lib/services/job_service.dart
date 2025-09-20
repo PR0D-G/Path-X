@@ -1,28 +1,45 @@
-import 'dart:convert';
-import 'package:flutter/services.dart';
+import 'package:mongo_dart/mongo_dart.dart';
 import '../models/job_model.dart';
+import 'mongo_db_service.dart';
 
 class JobService {
-  static const String _jobsAssetPath = 'assets/data/jobs.json';
-  static List<Job> _cachedJobs = [];
+  static final MongoDBService _mongoDBService = MongoDBService();
+  static bool _isInitialized = false;
+  static final List<Job> _cachedJobs = [];
 
+  // Initialize the service and connect to MongoDB
+  static Future<void> _initialize() async {
+    if (!_isInitialized) {
+      await _mongoDBService.connect();
+      _isInitialized = true;
+    }
+  }
+
+  // Get all jobs from MongoDB
   static Future<List<Job>> getJobs() async {
     if (_cachedJobs.isNotEmpty) {
       return _cachedJobs;
     }
 
     try {
-      // Load jobs from local JSON file
-      final String response = await rootBundle.loadString(_jobsAssetPath);
-      final List<dynamic> data = json.decode(response);
+      await _initialize();
+      final collection = _mongoDBService.collection('jobs');
       
-      // Convert JSON data to Job objects
-      _cachedJobs = data.map((json) => Job.fromJson(json)).toList();
+      final jobsData = await collection.find().toList();
+      
+      _cachedJobs.clear();
+      for (var jobData in jobsData) {
+        try {
+          _cachedJobs.add(Job.fromJson(jobData));
+        } catch (e) {
+          print('Error parsing job data: $e');
+        }
+      }
+      
       return _cachedJobs;
     } catch (e) {
-      print('Error loading jobs from JSON: $e');
-      // Fallback to sample data if there's an error
-      return _getSampleJobs();
+      print('Error loading jobs from MongoDB: $e');
+      return [];
     }
   }
 
@@ -30,13 +47,14 @@ class JobService {
   /// Returns null if no job is found
   static Future<Job?> getJobByTitle(String title) async {
     try {
-      final jobs = await getJobs();
-      return jobs.firstWhere(
-        (job) => job.roleTitle.toLowerCase() == title.trim().toLowerCase(),
-      );
-    } on StateError {
-      // No job found with the given title
-      return null;
+      await _initialize();
+      final collection = _mongoDBService.collection('jobs');
+      
+      final jobData = await collection.findOne({
+        'roleTitle': {'\$regex': '^${title.trim()}\\b', 'options': 'i'}
+      });
+      
+      return jobData != null ? Job.fromJson(jobData) : null;
     } catch (e) {
       print('Error finding job "$title": $e');
       return null;
@@ -55,41 +73,67 @@ class JobService {
     }
   }
 
-  // Fallback sample data in case JSON loading fails
-  static List<Job> _getSampleJobs() {
-    return [
-      Job(
-        roleTitle: 'System Engineer',
-        coreSkills: ['Linux/UNIX', 'Networking', 'Scripting (Python)', 'Cloud (AWS)'],
-        education: "Bachelor's",
-        averageSalary: '4 - 25+ LPA',
-        jobGrowthOutlook: '15%',
-        learningResources: [
-          LearningResource(
-            platform: 'Coursera',
-            courses: [
-              'AWS Cloud Technical Essentials',
-              'AWS Cloud Solutions Architect',
-            ],
-          ),
-        ],
-      ),
-      Job(
-        roleTitle: 'Cloud Engineer',
-        coreSkills: ['AWS/Azure/GCP', 'Kubernetes', 'Docker', 'Terraform'],
-        education: "Bachelor's",
-        averageSalary: '6 - 40+ LPA',
-        jobGrowthOutlook: '11.30%',
-        learningResources: [
-          LearningResource(
-            platform: 'Coursera',
-            courses: [
-              'AWS Cloud Technology Consultant',
-              'Getting Started with Data Analytics on AWS',
-            ],
-          ),
-        ],
-      ),
-    ];
+  // Add a new job to the database
+  static Future<bool> addJob(Job job) async {
+    try {
+      await _initialize();
+      final collection = _mongoDBService.collection('jobs');
+      
+      await collection.insertOne(job.toJson());
+      _cachedJobs.add(job); // Update cache
+      
+      return true;
+    } catch (e) {
+      print('Error adding job: $e');
+      return false;
+    }
+  }
+
+  // Update an existing job
+  static Future<bool> updateJob(String title, Job updatedJob) async {
+    try {
+      await _initialize();
+      final collection = _mongoDBService.collection('jobs');
+      
+      final result = await collection.updateOne(
+        where.eq('roleTitle', title),
+        {
+          '\$set': updatedJob.toJson(),
+        },
+      );
+      
+      // Update cache if needed
+      if (result.isSuccess && _cachedJobs.isNotEmpty) {
+        final index = _cachedJobs.indexWhere((j) => j.roleTitle == title);
+        if (index != -1) {
+          _cachedJobs[index] = updatedJob;
+        }
+      }
+      
+      return result.isSuccess;
+    } catch (e) {
+      print('Error updating job: $e');
+      return false;
+    }
+  }
+
+  // Delete a job by title
+  static Future<bool> deleteJob(String title) async {
+    try {
+      await _initialize();
+      final collection = _mongoDBService.collection('jobs');
+      
+      final result = await collection.deleteOne(where.eq('roleTitle', title));
+      
+      // Update cache if needed
+      if (result.isSuccess && _cachedJobs.isNotEmpty) {
+        _cachedJobs.removeWhere((j) => j.roleTitle == title);
+      }
+      
+      return result.isSuccess;
+    } catch (e) {
+      print('Error deleting job: $e');
+      return false;
+    }
   }
 }

@@ -49,6 +49,9 @@ class _LoginScreenState extends State<LoginScreen> {
               backgroundColor: Colors.green,
               behavior: SnackBarBehavior.floating,
               margin: EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(10)),
+              ),
             ),
           );
           
@@ -75,6 +78,9 @@ class _LoginScreenState extends State<LoginScreen> {
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+            ),
           ),
         );
       }
@@ -82,10 +88,13 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('An unexpected error occurred'),
+            content: Text('An unexpected error occurred. Please try again later.'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+            ),
           ),
         );
       }
