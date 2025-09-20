@@ -5,43 +5,59 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
-  // Auth change user stream
+  // Auth state changes stream
   Stream<User?> get user => _auth.authStateChanges();
 
   // Get current user
   User? get currentUser => _auth.currentUser;
 
-  // Sign in with email and password
-  Future<UserCredential?> signInWithEmailAndPassword(
-      String email, String password) async {
+  // Email & Password Sign In
+  Future<UserCredential> signInWithEmail(String email, String password) async {
+    return await _auth.signInWithEmailAndPassword(
+      email: email.trim(),
+      password: password.trim(),
+    );
+  }
+
+  // Email & Password Sign Up
+  Future<UserCredential> signUpWithEmail(String email, String password,
+      {String? displayName}) async {
     try {
-      return await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
+      // Create the user
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password.trim(),
       );
-    } catch (e) {
+
+      // Ensure displayName is set
+      if (displayName != null &&
+          displayName.isNotEmpty &&
+          userCredential.user != null) {
+        await userCredential.user!.updateDisplayName(displayName);
+        await userCredential.user!.reload();
+      }
+
+      return userCredential;
+    } on FirebaseAuthException catch (e) {
+      print('Firebase Auth Error (${e.code}): ${e.message}');
+      rethrow;
+    } catch (e, stackTrace) {
+      print('Unexpected error during signup: $e');
+      print('Stack trace: $stackTrace');
       rethrow;
     }
   }
 
-  // Register with email and password
-  Future<UserCredential?> registerWithEmailAndPassword(
-      String email, String password) async {
-    try {
-      return await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  // Sign in with Google
-  Future<UserCredential?> signInWithGoogle() async {
+  // Google Sign In
+  Future<UserCredential> signInWithGoogle() async {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return null;
+      if (googleUser == null) {
+        throw FirebaseAuthException(
+          code: 'google-sign-in-cancelled',
+          message: 'Google sign in was cancelled',
+        );
+      }
 
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
@@ -51,31 +67,40 @@ class AuthService {
         idToken: googleAuth.idToken,
       );
 
-      return await _auth.signInWithCredential(credential);
-    } catch (e) {
+      final userCredential = await _auth.signInWithCredential(credential);
+
+      // ✅ Ensure displayName is never null
+      if (userCredential.user != null &&
+          (userCredential.user!.displayName == null ||
+              userCredential.user!.displayName!.isEmpty)) {
+        await userCredential.user!.updateDisplayName(googleUser.displayName ??
+            userCredential.user!.email?.split('@').first);
+        await userCredential.user!.reload();
+      }
+
+      return userCredential;
+    } on FirebaseAuthException catch (e) {
+      print('Google Sign In Error (${e.code}): ${e.message}');
+      rethrow;
+    } catch (e, stackTrace) {
+      print('Unexpected error during Google sign in: $e');
+      print('Stack trace: $stackTrace');
       rethrow;
     }
   }
 
   // Sign out
   Future<void> signOut() async {
-    await _googleSignIn.signOut();
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {
+      // Ignore if already signed out
+    }
     await _auth.signOut();
   }
 
-  // Reset password
-  Future<void> resetPassword(String email) async {
-    await _auth.sendPasswordResetEmail(email: email);
-  }
-
-  // Update profile
-  Future<void> updateProfile({
-    String? displayName,
-    String? photoURL,
-  }) async {
-    await _auth.currentUser?.updateDisplayName(displayName);
-    if (photoURL != null) {
-      await _auth.currentUser?.updatePhotoURL(photoURL);
-    }
+  // Password reset
+  Future<void> sendPasswordResetEmail(String email) async {
+    await _auth.sendPasswordResetEmail(email: email.trim());
   }
 }

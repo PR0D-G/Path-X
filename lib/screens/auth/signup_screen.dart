@@ -55,67 +55,82 @@ class _SignupScreenState extends State<SignupScreen> {
 
     try {
       final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-      final user = await authProvider.registerWithEmailAndPassword(
+      
+      // Sign up the user with the provided email and password
+      debugPrint('Attempting to sign up with email: ${_emailController.text.trim()}');
+      final name = _nameController.text.trim();
+      
+      // Sign up the user and pass the display name
+      final user = await authProvider.signUpWithEmail(
         _emailController.text.trim(),
         _passwordController.text.trim(),
-        _nameController.text.trim(),
-      );
+        displayName: name,
+      ).catchError((error) {
+        debugPrint('Signup error: $error');
+        debugPrint('Error type: ${error.runtimeType}');
+        debugPrint('Stack trace: ${error.stackTrace}');
+        throw error; // Re-throw to be caught by the outer catch block
+      });
 
       if (mounted && user != null) {
-        // Wait for user profile to load
-        int attempts = 0;
-        while (authProvider.userProfile == null && attempts < 15) { // Increased timeout for signup
-          await Future.delayed(const Duration(milliseconds: 200));
-          attempts++;
-        }
+        // The display name is now handled in the auth provider
+        debugPrint('User signed up successfully. Display name: ${user.displayName}');
+        
+        // Force a refresh of the user profile
+        await authProvider.loadUserProfile(user.uid);
 
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account created successfully!'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(10)),
-            ),
-          ),
-        );
-
-        if (authProvider.shouldShowQuestionnaire) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (context) => QuestionnaireScreen(
-                name: authProvider.userProfile?.displayName ?? _nameController.text.trim(),
-                educationLevel: authProvider.userProfile?.educationLevel ?? "",
-                skills: authProvider.userProfile?.skills ?? [],
-                interests: authProvider.userProfile?.interests ?? "",
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Account created successfully!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              margin: EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(10)),
               ),
             ),
-            (route) => false,
           );
-        } else {
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/home',
-            (route) => false,
-          );
+
+          // Navigate to home screen or questionnaire
+        if (mounted) {
+          // Wait a short moment to ensure the state is updated
+          await Future.delayed(const Duration(milliseconds: 500));
+          
+          // Force rebuild the widget to get the latest state
+          setState(() {});
+          
+          // Check again after state update
+          if (authProvider.shouldShowQuestionnaire) {
+            debugPrint('Navigating to questionnaire screen');
+            Navigator.pushReplacementNamed(context, '/questionnaire');
+          } else {
+            debugPrint('Navigating to home screen');
+            Navigator.pushReplacementNamed(context, '/home');
+          }
+        }
         }
       }
-    } catch (e) {
-      String errorMessage = 'Sign up failed. Please try again.';
+    } catch (e, stackTrace) {
+      debugPrint('Caught signup error: $e');
+      debugPrint('Stack trace: $stackTrace');
+      
+      String errorMessage = 'Failed to create account: ${e.toString()}';
+      
+      // Handle specific Firebase Auth errors
       if (e.toString().contains('email-already-in-use')) {
-        errorMessage =
-            'This email is already registered. Please login instead.';
+        errorMessage = 'This email is already registered. Please use a different email or log in.';
       } else if (e.toString().contains('weak-password')) {
-        errorMessage =
-            'Password is too weak. Please choose a stronger password.';
+        errorMessage = 'The password provided is too weak. Please choose a stronger password (at least 6 characters).';
       } else if (e.toString().contains('invalid-email')) {
         errorMessage = 'Please enter a valid email address.';
       } else if (e.toString().contains('operation-not-allowed')) {
-        errorMessage = 'Email/password accounts are not enabled.';
+        errorMessage = 'Email/password accounts are not enabled. Please contact support.';
+      } else if (e.toString().contains('network-request-failed')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (e.toString().contains('too-many-requests')) {
+        errorMessage = 'Too many failed attempts. Please try again later.';
       }
 
       if (mounted) {
@@ -218,7 +233,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
                     }
-                    if (!RegExp(r'^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}').hasMatch(value)) {
+                    if (!RegExp(r'^[\w.-]+@([\w-]+\.)+[\w-]{2,4}').hasMatch(value)) {
                       return 'Please enter a valid email';
                     }
                     return null;

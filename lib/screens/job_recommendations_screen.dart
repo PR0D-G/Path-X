@@ -57,42 +57,57 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
 
   // Calculate match percentage based on skills
   int _calculateMatchPercentage(Job job, [List<String>? userSkills]) {
-    // Get user skills from auth provider if not provided
-    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-    final skills = userSkills ?? authProvider.userProfile?.skills ?? [];
+    try {
+      // Get user skills from auth provider if not provided
+      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+      final skills = userSkills ?? authProvider.userSkills;
 
-    // Avoid division by zero if a job has no core skills listed
-    if (job.coreSkills.isEmpty) return 0;
-    if (skills.isEmpty) return 0;
+      // Avoid division by zero if a job has no core skills listed
+      if (job.coreSkills.isEmpty) return 0;
+      if (skills.isEmpty) return 0;
 
-    final requiredSkills = job.coreSkills.map((s) => s.toLowerCase()).toSet();
-    final userSkillsLower = skills.map((s) => s.toLowerCase()).toSet();
+      final requiredSkills = job.coreSkills.map((s) => s.toLowerCase()).toSet();
+      final userSkillsLower = skills.map((s) => s.toLowerCase()).toSet();
 
-    final matchingSkills = requiredSkills.intersection(userSkillsLower).length;
-    final matchPercentage =
-        (matchingSkills / requiredSkills.length * 100).round();
+      final matchingSkills = requiredSkills.intersection(userSkillsLower).length;
+      final matchPercentage =
+          (matchingSkills / requiredSkills.length * 100).round();
 
-    return matchPercentage.clamp(0, 100);
+      return matchPercentage.clamp(0, 100);
+    } catch (e) {
+      debugPrint('Error calculating match percentage: $e');
+      return 0;
+    }
   }
 
   // Calculate matching skills for a job
   List<String> _getMatchingSkills(Job job, [List<String>? userSkills]) {
-    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-    final skills = userSkills ?? authProvider.userProfile?.skills ?? [];
-    final userSkillsLower = skills.map((s) => s.toLowerCase()).toSet();
-    return job.coreSkills
-        .where((skill) => userSkillsLower.contains(skill.toLowerCase()))
-        .toList();
+    try {
+      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+      final skills = userSkills ?? authProvider.userSkills;
+      final userSkillsLower = skills.map((s) => s.toLowerCase()).toSet();
+      return job.coreSkills
+          .where((skill) => userSkillsLower.contains(skill.toLowerCase()))
+          .toList();
+    } catch (e) {
+      debugPrint('Error getting matching skills: $e');
+      return [];
+    }
   }
 
   // Calculate missing skills for a job
   List<String> _getMissingSkills(Job job, [List<String>? userSkills]) {
-    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-    final skills = userSkills ?? authProvider.userProfile?.skills ?? [];
-    final userSkillsLower = skills.map((s) => s.toLowerCase()).toSet();
-    return job.coreSkills
-        .where((skill) => !userSkillsLower.contains(skill.toLowerCase()))
-        .toList();
+    try {
+      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+      final skills = userSkills ?? authProvider.userSkills;
+      final userSkillsLower = skills.map((s) => s.toLowerCase()).toSet();
+      return job.coreSkills
+          .where((skill) => !userSkillsLower.contains(skill.toLowerCase()))
+          .toList();
+    } catch (e) {
+      debugPrint('Error getting missing skills: $e');
+      return job.coreSkills.toList();
+    }
   }
 
   // Get color based on match percentage

@@ -40,7 +40,28 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    _controller.forward();
+    // Start the animation
+    _controller.forward().then((_) {
+      // After animation completes, check auth state
+      _checkAuthState();
+    });
+  }
+  
+  Future<void> _checkAuthState() async {
+    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+    
+    // Wait for auth state to be determined
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    if (!mounted) return;
+    
+    if (authProvider.isAuthenticated) {
+      // User is logged in, navigate to home
+      Navigator.of(context).pushReplacementNamed('/home');
+    } else {
+      // User is not logged in, navigate to login
+      Navigator.of(context).pushReplacementNamed('/login');
+    }
   }
 
   @override

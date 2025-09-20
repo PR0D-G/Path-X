@@ -35,50 +35,30 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-      final user = await authProvider.signInWithEmailAndPassword(
+      final user = await authProvider.signInWithEmail(
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
 
       if (mounted && user != null) {
-        // Wait for user profile to load
-        int attempts = 0;
-        while (authProvider.userProfile == null && attempts < 10) {
-          await Future.delayed(const Duration(milliseconds: 200));
-          attempts++;
-        }
-
-        if (!mounted) return;
-
-        if (authProvider.shouldShowQuestionnaire) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (context) => QuestionnaireScreen(
-                name: authProvider.userProfile?.displayName ?? '',
-                educationLevel: authProvider.userProfile?.educationLevel ?? "",
-                skills: authProvider.userProfile?.skills ?? [],
-                interests: authProvider.userProfile?.interests ?? "",
-              ),
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login successful!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              margin: EdgeInsets.all(16),
             ),
-            (route) => false,
           );
-        } else {
+          
+          // Navigate to home screen after successful login
           Navigator.pushNamedAndRemoveUntil(
             context,
             '/home',
             (route) => false,
           );
         }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Login successful!'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.all(16),
-          ),
-        );
       }
     } on FirebaseAuthException catch (e) {
       String message = 'An error occurred';

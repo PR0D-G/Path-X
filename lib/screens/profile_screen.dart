@@ -1,4 +1,5 @@
 import 'dart:io'; // Required for Image.file
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -59,18 +60,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadUserProfile() async {
-    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-    if (authProvider.userProfile != null) {
-      final profile = authProvider.userProfile!;
-      setState(() {
-        _nameController.text = profile.displayName ?? '';
-        _emailController.text = profile.email ?? '';
-        _bioController.text = profile.bio ?? '';
-        _locationController.text = profile.location ?? '';
-        _educationLevelController.text = profile.educationLevel ?? '';
-        _careerGoalController.text = profile.careerGoal ?? '';
-        _profileImageUrl = profile.photoURL;
-      });
+    try {
+      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+      
+      // First, ensure we have the user's profile data
+      if (authProvider.userProfile == null && authProvider.user != null) {
+        await authProvider.loadUserProfile(authProvider.user!.uid);
+      }
+      
+      if (mounted) {
+        final profile = authProvider.userProfile;
+        final user = authProvider.user;
+        
+        setState(() {
+          // Use displayName from profile if available, otherwise use from user object
+          _nameController.text = profile?.displayName ?? 
+                               user?.displayName ?? 
+                               user?.email?.split('@').first ?? 
+                               'User';
+          _emailController.text = user?.email ?? '';
+          _bioController.text = profile?.bio ?? '';
+          _locationController.text = profile?.location ?? '';
+          _educationLevelController.text = profile?.educationLevel ?? '';
+          _careerGoalController.text = profile?.careerGoal ?? '';
+          _profileImageUrl = profile?.photoURL ?? user?.photoURL;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading user profile: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load profile')),
+        );
+      }
     }
   }
 
@@ -97,36 +119,69 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-
+    
     setState(() => _isLoading = true);
-
+    
     try {
       final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-      // In a real app, upload the local image file to storage and get a URL first
-      // For now, we save the path directly as per the original logic
-      final updatedProfile = UserProfile(
-        uid: authProvider.user!.uid,
-        email: _emailController.text.trim(),
-        displayName: _nameController.text.trim(),
-        photoURL: _profileImageUrl,
-        bio: _bioController.text.trim(),
-        location: _locationController.text.trim(),
-        educationLevel: _educationLevelController.text.trim(),
-        careerGoal: _careerGoalController.text.trim(),
-      );
-
-      await authProvider.updateUserProfile(updatedProfile);
-
+      final user = authProvider.user;
+      
+      if (user != null) {
+        // Update user profile in Firestore
+        final updatedProfile = UserProfile(
+          uid: user.uid,
+          email: _emailController.text.trim(),
+          displayName: _nameController.text.trim(),
+          photoURL: _profileImageUrl,
+          bio: _bioController.text.trim(),
+          location: _locationController.text.trim(),
+          educationLevel: _educationLevelController.text.trim(),
+          careerGoal: _careerGoalController.text.trim(),
+          skills: authProvider.userProfile?.skills ?? [],
+          hasCompletedQuestionnaire: authProvider.userProfile?.hasCompletedQuestionnaire ?? false,
+          interests: authProvider.userProfile?.interests,
+          // Preserve timestamps
+          createdAt: authProvider.userProfile?.createdAt,
+          updatedAt: DateTime.now(),
+        );
+        
+        // Update in Firestore
+        await authProvider.updateUserProfile(updatedProfile);
+        
+        // Update in Firebase Auth if name changed
+        if (user.displayName != _nameController.text.trim()) {
+          await user.updateDisplayName(_nameController.text.trim());
+          await user.reload();
+        }
+        
+        if (mounted) {
+          setState(() => _isEditing = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profile updated successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } on FirebaseException catch (e) {
+      debugPrint('Firebase error saving profile: $e');
       if (mounted) {
-        setState(() => _isEditing = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully')),
+          SnackBar(
+            content: Text('Firebase error: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } catch (e) {
+      debugPrint('Error saving profile: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update profile: $e')),
+          const SnackBar(
+            content: Text('Failed to update profile. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -320,6 +375,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileHeader() {
+    final authProvider = Provider.of<AppAuthProvider>(context);
+    final user = authProvider.user;
+    final userProfile = authProvider.userProfile;
+    
     // If the path is from the network (http), use Image.network.
     // If it's a local file path, use Image.file.
     // Otherwise, show the icon.
@@ -327,41 +386,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_profileImageUrl != null) {
       if (_profileImageUrl!.startsWith('http')) {
         profileImage = Image.network(_profileImageUrl!,
-            fit: BoxFit.cover, width: double.infinity, height: 200);
+            fit: BoxFit.cover, width: 120, height: 120);
       } else {
-        // FIX: Use Image.file for local paths from ImagePicker
         profileImage = Image.file(File(_profileImageUrl!),
-            fit: BoxFit.cover, width: double.infinity, height: 200);
+            fit: BoxFit.cover, width: 120, height: 120);
       }
     } else {
       profileImage =
-          Icon(Icons.person, size: 80, color: Colors.white.withOpacity(0.8));
+          Icon(Icons.person, size: 60, color: Colors.white.withOpacity(0.8));
     }
 
-    return Center(
-      child: Stack(
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
         children: [
-          CircleAvatar(
-            radius: 60,
-            backgroundColor: Colors.blue.shade100,
-            child: ClipOval(
-              child: profileImage,
-            ),
-          ),
-          if (_isEditing)
-            Positioned(
-              bottom: 0,
-              right: 0,
-              child: CircleAvatar(
-                radius: 20,
-                backgroundColor: Theme.of(context).primaryColor,
-                child: IconButton(
-                  icon: const Icon(Icons.camera_alt,
-                      color: Colors.white, size: 20),
-                  onPressed: _pickImage,
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              CircleAvatar(
+                radius: 60,
+                backgroundColor: Colors.blue.shade100,
+                child: ClipOval(
+                  child: profileImage,
                 ),
               ),
+              if (_isEditing)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: CircleAvatar(
+                    radius: 20,
+                    backgroundColor: Theme.of(context).primaryColor,
+                    child: IconButton(
+                      icon: const Icon(Icons.camera_alt,
+                          color: Colors.white, size: 20),
+                      onPressed: _pickImage,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Display user's name
+          Text(
+            userProfile?.displayName ?? 
+            user?.displayName ?? 
+            user?.email?.split('@').first ?? 
+            'User',
+            style: GoogleFonts.poppins(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
+            textAlign: TextAlign.center,
+          ),
+          if (user?.email != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              user!.email!,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: Colors.grey.shade400,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ],
       ),
     );

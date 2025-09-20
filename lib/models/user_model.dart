@@ -34,7 +34,6 @@ class UserProfile {
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
-  // Convert UserProfile to a Map
   Map<String, dynamic> toMap() {
     return {
       'uid': uid,
@@ -54,7 +53,6 @@ class UserProfile {
     };
   }
 
-  // Create UserProfile from a Map
   factory UserProfile.fromMap(Map<String, dynamic> map) {
     return UserProfile(
       uid: map['uid'] ?? '',
@@ -66,7 +64,7 @@ class UserProfile {
       skills: map['skills'] != null ? List<String>.from(map['skills']) : null,
       educationLevel: map['educationLevel'],
       careerGoal: map['careerGoal'],
-      assessmentResults: map['assessmentResults'] != null 
+      assessmentResults: map['assessmentResults'] != null
           ? Map<String, dynamic>.from(map['assessmentResults'])
           : null,
       hasCompletedQuestionnaire: map['hasCompletedQuestionnaire'] ?? false,
@@ -90,6 +88,7 @@ class UserProfile {
     bool? hasCompletedQuestionnaire,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? interests, // ✅ added here
   }) {
     return UserProfile(
       uid: uid ?? this.uid,
@@ -102,9 +101,11 @@ class UserProfile {
       educationLevel: educationLevel ?? this.educationLevel,
       careerGoal: careerGoal ?? this.careerGoal,
       assessmentResults: assessmentResults ?? this.assessmentResults,
-      hasCompletedQuestionnaire: hasCompletedQuestionnaire ?? this.hasCompletedQuestionnaire,
+      hasCompletedQuestionnaire:
+          hasCompletedQuestionnaire ?? this.hasCompletedQuestionnaire,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      interests: interests ?? this.interests,
     );
   }
 }
@@ -113,7 +114,7 @@ class UserProgress {
   final String id;
   final String userId;
   final String jobRoleId;
-  final Map<String, dynamic> completedLessons; // Map of lessonId to completion status
+  final Map<String, dynamic> completedLessons;
   final double progressPercentage;
   final DateTime lastAccessed;
   final DateTime createdAt;
@@ -132,7 +133,6 @@ class UserProgress {
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
-  // Convert UserProgress to a Map
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -146,21 +146,21 @@ class UserProgress {
     };
   }
 
-  // Create UserProgress from a Map
   factory UserProgress.fromMap(Map<String, dynamic> map) {
     return UserProgress(
       id: map['id'] ?? '',
       userId: map['userId'] ?? '',
       jobRoleId: map['jobRoleId'] ?? '',
-      completedLessons: Map<String, dynamic>.from(map['completedLessons'] ?? {}),
+      completedLessons:
+          Map<String, dynamic>.from(map['completedLessons'] ?? {}),
       progressPercentage: (map['progressPercentage'] ?? 0.0).toDouble(),
-      lastAccessed: (map['lastAccessed'] as Timestamp?)?.toDate(),
-      createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
-      updatedAt: (map['updatedAt'] as Timestamp?)?.toDate(),
+      lastAccessed:
+          (map['lastAccessed'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 
-  // Create a new UserProgress with updated fields
   UserProgress copyWith({
     String? id,
     String? userId,

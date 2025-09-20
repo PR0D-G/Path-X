@@ -1,7 +1,12 @@
+import 'dart:developer';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+
+import '../models/user_model.dart';
 import '../providers/auth_provider.dart';
 import 'job_recommendations_screen.dart';
 
@@ -101,50 +106,107 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   ];
 
 
+  Future<void> _submitQuestionnaire() async {
+    try {
+      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+      final user = authProvider.user;
+      
+      if (user != null) {
+        // Calculate assessment results by category
+        final Map<String, dynamic> assessmentResults = {};
+        _answers.forEach((index, value) {
+          final category = _questions[index]['category'] as String;
+          if (!assessmentResults.containsKey(category)) {
+            assessmentResults[category] = {
+              'total': 0.0,
+              'count': 0,
+            };
+          }
+          assessmentResults[category]['total'] += value;
+          assessmentResults[category]['count']++;
+        });
+
+        // Calculate average scores
+        final Map<String, double> averageScores = {};
+        assessmentResults.forEach((category, data) {
+          averageScores[category] = (data['total'] as double) / (data['count'] as int);
+        });
+
+        // Get user skills from the form
+        final skills = _skillsController.text
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+
+        // Update user profile with assessment results
+        final updatedProfile = UserProfile(
+          uid: user.uid,
+          email: user.email,
+          displayName: _nameController.text.trim(),
+          educationLevel: _educationController.text.trim(),
+          skills: skills,
+          interests: _interestsController.text.trim(),
+          assessmentResults: averageScores,
+          hasCompletedQuestionnaire: true,
+          createdAt: authProvider.userProfile?.createdAt,
+          updatedAt: DateTime.now(),
+        );
+
+        // Save to Firestore
+        await authProvider.updateUserProfile(updatedProfile);
+
+        if (mounted) {
+          // Navigate to job recommendations with assessment results
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => JobRecommendationsScreen(
+                assessmentResults: averageScores,
+              ),
+            ),
+          );
+        }
+      }
+    } on FirebaseException catch (e) {
+      debugPrint('Firebase error submitting questionnaire: ${e.message}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error submitting questionnaire: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to submit questionnaire. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _answerQuestion(double rating) async {
-    // Added async
     setState(() {
       _answers[_currentQuestionIndex] = rating;
     });
 
     if (_currentQuestionIndex < _questions.length - 1) {
+      setState(() {
+        _currentQuestionIndex++;
+      });
       _pageController.nextPage(
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOut,
       );
     } else {
-      // All questions answered, process and navigate
-      try {
-        final authProvider =
-            Provider.of<AppAuthProvider>(context, listen: false);
-        await authProvider.completeQuestionnaire(); // Ensured await
-
-        if (mounted) {
-          // Navigate to recommendations screen, replacing the current screen
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => JobRecommendationsScreen(
-                // name: widget.name, // These were causing errors before, JobRecommendationsScreen doesn't expect them
-                // educationLevel: widget.educationLevel,
-                // skills: widget.skills,
-                // interests: widget.interests,
-                // skillLevel: '', // Passing empty string for now
-                assessmentResults: _answers
-                    .map((key, value) => MapEntry(key.toString(), value)),
-              ),
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text(
-                    'Failed to save questionnaire results. Please try again.')),
-          );
-        }
-      }
+      // All questions answered, submit the questionnaire
+      await _submitQuestionnaire();
     }
   }
 
@@ -307,7 +369,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
 
   Widget _buildQuestionCard(int questionIndex) {
     final question = _questions[questionIndex];
-    final currentRating = _answers[questionIndex] ?? 0.0;
+    final currentRating = _answers[questionIndex]?.toDouble() ?? 0.0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
