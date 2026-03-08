@@ -7,10 +7,8 @@ class QuestionService {
     List<Map<String, dynamic>> questions = [];
 
     try {
-      print("--- STARTING QUESTION FETCH ---");
-      // 1. Connection check
-      final test = await supabase.from('questions').select().limit(1);
-      print("Supabase connection check successful. First question: $test");
+      // 1. Connection check (Awaited to ensure connectivity early)
+      await supabase.from('questions').select().limit(1);
 
       // RIASEC categories
       final riasecCategories = [
@@ -37,7 +35,6 @@ class QuestionService {
       // Shuffle the RIASEC block so categories are mixed
       riasecQuestions.shuffle();
       questions.addAll(riasecQuestions);
-      print("Loaded ${riasecQuestions.length} RIASEC questions.");
 
       // Aptitude (Logic, Reasoning, Pattern)
       List<Map<String, dynamic>> aptitudeQuestions = [];
@@ -64,7 +61,6 @@ class QuestionService {
       // Shuffle the aptitude block together
       aptitudeQuestions.shuffle();
       questions.addAll(aptitudeQuestions);
-      print("Loaded ${aptitudeQuestions.length} Aptitude questions.");
 
       // Quick math (Appended at the end of the test)
       final math = await supabase.from('quick_math').select();
@@ -75,15 +71,12 @@ class QuestionService {
       }).toList();
 
       questions.addAll(selectedMath);
-      print("Loaded ${selectedMath.length} Math questions.");
 
-      print("--- TOTAL QUESTIONS LOADED: ${questions.length} ---");
       // The final array consists of Shuffled RIASEC -> Shuffled Aptitude -> Math questions at the very end.
       return questions;
     } catch (e) {
-      print("!!! ERROR FETCHING QUESTIONS: $e !!!");
-      // Return whatever we have so far, or empty list
-      return questions;
+      // Return empty list on error
+      return [];
     }
   }
 }

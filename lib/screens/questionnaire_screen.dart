@@ -137,11 +137,6 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           "math": mathScore,
         };
 
-        // Standard terminal logging for highest personalities
-        List<MapEntry<String, int>> sorted = riasecScores.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
-        print("Top 3 Personalities: ${sorted.take(3)}");
-
         // Get user skills from the form
         final skills = _skillsController.text
             .split(',')
