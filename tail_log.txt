@@ -1,0 +1,200 @@
+﻿[        ] Resolve mutations for :sqflite_android:prepareLintJarForPublish (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] :sqflite_android:prepareLintJarForPublish (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] > Task :sqflite_android:prepareLintJarForPublish UP-TO-DATE
+[        ] Caching disabled for task ':sqflite_android:prepareLintJarForPublish' because:
+[        ]   Build cache is disabled
+[        ]   Caching has been disabled for the task
+[        ] Skipping task ':sqflite_android:prepareLintJarForPublish' as it is up-to-date.
+[        ] Resolve mutations for :sqflite_android:mergeDebugJavaResource (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] :sqflite_android:mergeDebugJavaResource (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] > Task :sqflite_android:mergeDebugJavaResource UP-TO-DATE
+[        ] Caching disabled for task ':sqflite_android:mergeDebugJavaResource' because:
+[        ]   Build cache is disabled
+[        ]   Caching has been disabled for the task
+[        ] Skipping task ':sqflite_android:mergeDebugJavaResource' as it is up-to-date.
+[        ] Resolve mutations for :sqflite_android:syncDebugLibJars (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] :sqflite_android:syncDebugLibJars (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] > Task :sqflite_android:syncDebugLibJars UP-TO-DATE
+[        ] Caching disabled for task ':sqflite_android:syncDebugLibJars' because:
+[        ]   Build cache is disabled
+[        ] Skipping task ':sqflite_android:syncDebugLibJars' as it is up-to-date.
+[        ] Resolve mutations for :sqflite_android:bundleDebugAar (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] :sqflite_android:bundleDebugAar (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] > Task :sqflite_android:bundleDebugAar UP-TO-DATE
+[        ] Caching disabled for task ':sqflite_android:bundleDebugAar' because:
+[        ]   Build cache is disabled
+[        ]   Caching has been disabled for the task
+[        ] Skipping task ':sqflite_android:bundleDebugAar' as it is up-to-date.
+[        ] Resolve mutations for :sqflite_android:assembleDebug (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] :sqflite_android:assembleDebug (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] > Task :sqflite_android:assembleDebug UP-TO-DATE
+[        ] Skipping task ':sqflite_android:assembleDebug' as it has no actions.
+[        ] Resolve mutations for :url_launcher_android:stripDebugDebugSymbols (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] :url_launcher_android:stripDebugDebugSymbols (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] > Task :url_launcher_android:stripDebugDebugSymbols NO-SOURCE
+[        ] Skipping task ':url_launcher_android:stripDebugDebugSymbols' as it has no source files and no previous output files.
+[        ] Resolve mutations for :url_launcher_android:copyDebugJniLibsProjectAndLocalJars (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] :url_launcher_android:copyDebugJniLibsProjectAndLocalJars (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] > Task :url_launcher_android:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+[        ] Caching disabled for task ':url_launcher_android:copyDebugJniLibsProjectAndLocalJars' because:
+[        ]   Build cache is disabled
+[        ]   Caching has been disabled for the task
+[        ] Skipping task ':url_launcher_android:copyDebugJniLibsProjectAndLocalJars' as it is up-to-date.
+[        ] Resolve mutations for :url_launcher_android:extractDebugAnnotations (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] :url_launcher_android:extractDebugAnnotations (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] > Task :url_launcher_android:extractDebugAnnotations UP-TO-DATE
+[        ] Caching disabled for task ':url_launcher_android:extractDebugAnnotations' because:
+[        ]   Build cache is disabled
+[        ] Skipping task ':url_launcher_android:extractDebugAnnotations' as it is up-to-date.
+[        ] Resolve mutations for :url_launcher_android:extractDeepLinksForAarDebug (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] :url_launcher_android:extractDeepLinksForAarDebug (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] > Task :url_launcher_android:extractDeepLinksForAarDebug UP-TO-DATE
+[        ] Caching disabled for task ':url_launcher_android:extractDeepLinksForAarDebug' because:
+[        ]   Build cache is disabled
+[        ] Skipping task ':url_launcher_android:extractDeepLinksForAarDebug' as it is up-to-date.
+[        ] Resolve mutations for :url_launcher_android:mergeDebugGeneratedProguardFiles (Thread[#761,Execution worker Thread 10,5,main]) started.
+[  +92 ms] :url_launcher_android:mergeDebugGeneratedProguardFiles (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] > Task :url_launcher_android:mergeDebugGeneratedProguardFiles UP-TO-DATE
+[        ] Caching disabled for task ':url_launcher_android:mergeDebugGeneratedProguardFiles' because:
+[        ]   Build cache is disabled
+[        ]   Simple merging task
+[        ] Skipping task ':url_launcher_android:mergeDebugGeneratedProguardFiles' as it is up-to-date.
+[        ] Resolve mutations for :url_launcher_android:mergeDebugConsumerProguardFiles (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] :url_launcher_android:mergeDebugConsumerProguardFiles (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] > Task :url_launcher_android:mergeDebugConsumerProguardFiles UP-TO-DATE
+[        ] Caching disabled for task ':url_launcher_android:mergeDebugConsumerProguardFiles' because:
+[        ]   Build cache is disabled
+[        ]   Simple merging task
+[        ] Skipping task ':url_launcher_android:mergeDebugConsumerProguardFiles' as it is up-to-date.
+[        ] Resolve mutations for :url_launcher_android:prepareDebugArtProfile (Thread[#761,Execution worker Thread 10,5,main]) started.
+[        ] :url_launcher_android:prepareDebugArtProfile (Thread[#757,Execution worker Thread 6,5,main]) started.
+[        ] > Task :url_launcher_android:prepareDebugArtProfile UP-TO-DATE
+[        ] Caching disabled for task ':url_launcher_android:prepareDebugArtProfile' because:
+[        ]   Build cache is disabled
+[        ]   Caching has been disabled for the task
+[        ] Skipping task ':url_launcher_android:prepareDebugArtProfile' as it is up-to-date.
+[        ] Resolve mutations for :url_launcher_android:prepareLintJarForPublish (Thread[#757,Execution worker Thread 6,5,main]) started.
+[        ] :url_launcher_android:prepareLintJarForPublish (Thread[#757,Execution worker Thread 6,5,main]) started.
+[        ] > Task :url_launcher_android:prepareLintJarForPublish UP-TO-DATE
+[        ] Caching disabled for task ':url_launcher_android:prepareLintJarForPublish' because:
+[        ]   Build cache is disabled
+[        ]   Caching has been disabled for the task
+[        ] Skipping task ':url_launcher_android:prepareLintJarForPublish' as it is up-to-date.
+[        ] Resolve mutations for :url_launcher_android:mergeDebugJavaResource (Thread[#757,Execution worker Thread 6,5,main]) started.
+[        ] :url_launcher_android:mergeDebugJavaResource (Thread[#759,Execution worker Thread 8,5,main]) started.
+[        ] > Task :url_launcher_android:mergeDebugJavaResource UP-TO-DATE
+[        ] Caching disabled for task ':url_launcher_android:mergeDebugJavaResource' because:
+[        ]   Build cache is disabled
+[        ]   Caching has been disabled for the task
+[        ] Skipping task ':url_launcher_android:mergeDebugJavaResource' as it is up-to-date.
+[        ] Resolve mutations for :url_launcher_android:syncDebugLibJars (Thread[#759,Execution worker Thread 8,5,main]) started.
+[        ] :url_launcher_android:syncDebugLibJars (Thread[#759,Execution worker Thread 8,5,main]) started.
+[        ] > Task :url_launcher_android:syncDebugLibJars UP-TO-DATE
+[        ] Caching disabled for task ':url_launcher_android:syncDebugLibJars' because:
+[        ]   Build cache is disabled
+[        ] Skipping task ':url_launcher_android:syncDebugLibJars' as it is up-to-date.
+[        ] Resolve mutations for :url_launcher_android:bundleDebugAar (Thread[#759,Execution worker Thread 8,5,main]) started.
+[        ] :url_launcher_android:bundleDebugAar (Thread[#759,Execution worker Thread 8,5,main]) started.
+[        ] > Task :url_launcher_android:bundleDebugAar UP-TO-DATE
+[        ] Caching disabled for task ':url_launcher_android:bundleDebugAar' because:
+[        ]   Build cache is disabled
+[        ]   Caching has been disabled for the task
+[        ] Skipping task ':url_launcher_android:bundleDebugAar' as it is up-to-date.
+[        ] Resolve mutations for :url_launcher_android:assembleDebug (Thread[#759,Execution worker Thread 8,5,main]) started.
+[        ] :url_launcher_android:assembleDebug (Thread[#759,Execution worker Thread 8,5,main]) started.
+[        ] > Task :url_launcher_android:assembleDebug UP-TO-DATE
+[        ] Skipping task ':url_launcher_android:assembleDebug' as it has no actions.
+[        ] BUILD SUCCESSFUL in 17s
+[        ] 440 actionable tasks: 13 executed, 427 up-to-date
+[        ] Watched directory hierarchies: [C:\src\flutter\packages\flutter_tools\gradle, D:\projects\Path-X\android]
+[ +105 ms] Running Gradle task 'assembleDebug'... (completed in 17.4s)
+[  +12 ms] LocalFile: 'D:\projects\Path-X\android\build.gradle' provides AGP version from classpath: 8.1.1
+[  +25 ms] "flutter apk" took 18,761ms.
+[  +99 ms] Gradle build failed to 
+produce an .apk file. It's likely 
+that this file was generated under 
+D:\projects\Path-X\build, but the 
+tool couldn't find it.
+[   +1 ms] 
+           #0      throwToolExit (p
+ackage:flutter_tools/src/base/commo
+n.dart:34:3)
+           #1      
+_exitWithExpectedFileNotFound (pack
+age:flutter_tools/src/android/gradl
+e.dart:1243:3)
+           #2      AndroidGradleBui
+lder.buildGradleApp (package:flutte
+r_tools/src/android/gradle.dart:642
+:9)
+           <asynchronous 
+suspension>
+           #3      
+AndroidGradleBuilder.buildApk (pack
+age:flutter_tools/src/android/gradl
+e.dart:239:5)
+           <asynchronous 
+suspension>
+           #4      
+BuildApkCommand.runCommand (package
+:flutter_tools/src/commands/build_a
+pk.dart:131:5)
+           <asynchronous 
+suspension>
+           #5      
+FlutterCommand.run.<anonymous 
+closure> (package:flutter_tools/src
+/runner/flutter_command.dart:1581:2
+7)
+           <asynchronous 
+suspension>
+           #6      
+AppContext.run.<anonymous closure> 
+(package:flutter_tools/src/base/con
+text.dart:154:19)
+           <asynchronous 
+suspension>
+           #7      
+CommandRunner.runCommand (package:a
+rgs/command_runner.dart:212:13)
+           <asynchronous 
+suspension>
+           #8      FlutterCommandRu
+nner.runCommand.<anonymous 
+closure> (package:flutter_tools/src
+/runner/flutter_command_runner.dart
+:503:9)
+           <asynchronous 
+suspension>
+           #9      
+AppContext.run.<anonymous closure> 
+(package:flutter_tools/src/base/con
+text.dart:154:19)
+           <asynchronous 
+suspension>
+           #10     
+FlutterCommandRunner.runCommand (pa
+ckage:flutter_tools/src/runner/flut
+ter_command_runner.dart:438:5)
+           <asynchronous 
+suspension>
+           #11     run.<anonymous 
+closure>.<anonymous closure> (packa
+ge:flutter_tools/runner.dart:98:11)
+           <asynchronous 
+suspension>
+           #12     
+AppContext.run.<anonymous closure> 
+(package:flutter_tools/src/base/con
+text.dart:154:19)
+           <asynchronous 
+suspension>
+           #13     main (package:fl
+utter_tools/executable.dart:101:3)
+           <asynchronous 
+suspension>
+
+
+[        ] Running 1 shutdown hook
+[   +1 ms] Shutdown hooks complete
+[ +259 ms] exiting with code 1

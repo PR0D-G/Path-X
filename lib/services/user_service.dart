@@ -1,10 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 
 class UserService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   // Collection references
   final String _usersCollection = 'users';
@@ -12,32 +10,38 @@ class UserService {
 
   // Get user profile
   Stream<UserProfile> getUserProfile(String userId) {
-    return _firestore
-        .collection(_usersCollection)
-        .doc(userId)
-        .snapshots()
-        .map((doc) => UserProfile.fromMap(
-            {'uid': doc.id, ...?doc.data() as Map<String, dynamic>}));
+    return _supabase
+        .from(_usersCollection)
+        .stream(primaryKey: ['id'])
+        .eq('id', userId)
+        .map((docs) {
+          if (docs.isEmpty) throw Exception('User profile not found');
+          final data = Map<String, dynamic>.from(docs.first);
+          data['uid'] = data['id'];
+          return UserProfile.fromMap(data);
+        });
   }
 
   // Create or update user profile
   Future<void> updateUserProfile(UserProfile userProfile) async {
-    await _firestore
-        .collection(_usersCollection)
-        .doc(userProfile.uid)
-        .set(userProfile.toMap(), SetOptions(merge: true));
+    final data = userProfile.toMap();
+    data['id'] = data['uid'];
+    data.remove('uid');
+
+    await _supabase.from(_usersCollection).upsert(data);
   }
 
   // Get user progress for a specific job role
   Stream<UserProgress> getUserProgress(String userId, String jobRoleId) {
-    return _firestore
-        .collection(_userProgressCollection)
-        .where('userId', isEqualTo: userId)
-        .where('jobRoleId', isEqualTo: jobRoleId)
-        .limit(1)
-        .snapshots()
-        .map((snapshot) {
-      if (snapshot.docs.isEmpty) {
+    return _supabase
+        .from(_userProgressCollection)
+        .stream(primaryKey: ['id']).map((docs) {
+      final filteredDocs = docs
+          .where((doc) =>
+              doc['user_id'] == userId && doc['job_role_id'] == jobRoleId)
+          .toList();
+
+      if (filteredDocs.isEmpty) {
         // Return a new progress object if none exists
         return UserProgress(
           id: '',
@@ -47,34 +51,38 @@ class UserService {
           progressPercentage: 0.0,
         );
       }
-      return UserProgress.fromMap({
-        'id': snapshot.docs.first.id,
-        ...snapshot.docs.first.data(),
-      });
+
+      final doc = filteredDocs.first;
+      return UserProgress(
+        id: doc['id'].toString(),
+        userId: doc['user_id'] as String,
+        jobRoleId: doc['job_role_id'] as String,
+        completedLessons:
+            doc['completed_lessons'] as Map<String, dynamic>? ?? {},
+        progressPercentage:
+            (doc['progress_percentage'] as num?)?.toDouble() ?? 0.0,
+      );
     });
   }
 
   // Update user progress
   Future<void> updateUserProgress(UserProgress progress) async {
-    final progressMap = progress.toMap();
-    // Remove the id from the map as it's the document ID
-    final progressData = Map<String, dynamic>.from(progressMap);
-    progressData.remove('id');
+    final progressData = {
+      'user_id': progress.userId,
+      'job_role_id': progress.jobRoleId,
+      'completed_lessons': progress.completedLessons,
+      'progress_percentage': progress.progressPercentage,
+    };
 
     if (progress.id.isEmpty) {
       // Create new progress document
-      final docRef = await _firestore.collection(_userProgressCollection).add(progressData);
-      // Update the progress with the new document ID
-      await _firestore
-          .collection(_userProgressCollection)
-          .doc(docRef.id)
-          .update({'id': docRef.id});
+      await _supabase.from(_userProgressCollection).insert(progressData);
     } else {
       // Update existing progress document
-      await _firestore
-          .collection(_userProgressCollection)
-          .doc(progress.id)
-          .update(progressData);
+      await _supabase
+          .from(_userProgressCollection)
+          .update(progressData)
+          .eq('id', progress.id);
     }
   }
 
@@ -84,19 +92,20 @@ class UserService {
     required String lessonId,
     required bool isCompleted,
   }) async {
-    final userId = _auth.currentUser?.uid;
+    final user = _supabase.auth.currentUser;
+    final userId = user?.id;
     if (userId == null) return;
 
     // Get the current progress
-    final progressSnapshot = await _firestore
-        .collection(_userProgressCollection)
-        .where('userId', isEqualTo: userId)
-        .where('jobRoleId', isEqualTo: jobRoleId)
-        .limit(1)
-        .get();
+    final docs = await _supabase
+        .from(_userProgressCollection)
+        .select()
+        .eq('user_id', userId)
+        .eq('job_role_id', jobRoleId)
+        .limit(1);
 
     UserProgress progress;
-    if (progressSnapshot.docs.isEmpty) {
+    if (docs.isEmpty) {
       // Create new progress if it doesn't exist
       progress = UserProgress(
         id: '',
@@ -107,17 +116,21 @@ class UserService {
       );
     } else {
       // Update existing progress
-      final data = progressSnapshot.docs.first.data();
-      final completedLessons = Map<String, dynamic>.from(data['completedLessons'] ?? {});
+      final data = docs.first;
+      final completedLessons =
+          Map<String, dynamic>.from(data['completed_lessons'] ?? {});
       completedLessons[lessonId] = isCompleted;
-      
+
       // Calculate progress percentage (simplified example)
-      final totalLessons = 10; // You'll need to get the actual total number of lessons
-      final completedCount = completedLessons.values.where((v) => v == true).length;
-      final progressPercentage = totalLessons > 0 ? completedCount / totalLessons : 0.0;
-      
+      final totalLessons =
+          10; // You'll need to get the actual total number of lessons
+      final completedCount =
+          completedLessons.values.where((v) => v == true).length;
+      final progressPercentage =
+          totalLessons > 0 ? completedCount / totalLessons : 0.0;
+
       progress = UserProgress(
-        id: progressSnapshot.docs.first.id,
+        id: data['id'].toString(),
         userId: userId,
         jobRoleId: jobRoleId,
         completedLessons: completedLessons,
@@ -130,18 +143,25 @@ class UserService {
 
   // Get all user progress for the current user
   Stream<List<UserProgress>> getAllUserProgress() {
-    final userId = _auth.currentUser?.uid;
+    final user = _supabase.auth.currentUser;
+    final userId = user?.id;
     if (userId == null) return Stream.value([]);
-    
-    return _firestore
-        .collection(_userProgressCollection)
-        .where('userId', isEqualTo: userId)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => UserProgress.fromMap({
-                  'id': doc.id,
-                  ...doc.data(),
-                }))
-            .toList());
+
+    return _supabase
+        .from(_userProgressCollection)
+        .stream(primaryKey: ['id']).map((docs) {
+      return docs
+          .where((doc) => doc['user_id'] == userId) // Client-side filtering
+          .map((doc) => UserProgress(
+                id: doc['id'].toString(),
+                userId: doc['user_id'] as String,
+                jobRoleId: doc['job_role_id'] as String,
+                completedLessons:
+                    doc['completed_lessons'] as Map<String, dynamic>? ?? {},
+                progressPercentage:
+                    (doc['progress_percentage'] as num?)?.toDouble() ?? 0.0,
+              ))
+          .toList();
+    });
   }
 }

@@ -18,12 +18,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = false;
 
   final List<Widget> _screens = [
-    JobRecommendationsScreen(
-      assessmentResults: {}, // Provide an empty map as default or get it from your state
+    const JobRecommendationsScreen(
+      assessmentResults: {},
     ),
-    const Center(
-        child: Text(
-            'Explore learning resources')), // Placeholder for learning section
+    const LearningPathScreen(),
     const ProfileScreen(),
   ];
 
@@ -41,54 +39,154 @@ class _HomeScreenState extends State<HomeScreen> {
             fontSize: 20,
           ),
         ),
-        actions: _selectedIndex == 2
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.logout),
-                  onPressed: () async {
-                    setState(() => _isLoading = true);
-                    await authProvider.signOut();
-                    if (mounted) {
-                      setState(() => _isLoading = false);
-                    }
-                  },
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      drawer: Drawer(
+        child: Column(
+          children: [
+            UserAccountsDrawerHeader(
+              decoration: BoxDecoration(
+                  color: Colors.blue.shade800,
+                  image: const DecorationImage(
+                    image: NetworkImage(
+                        'https://images.unsplash.com/photo-1557683316-973673baf926'), // generic abstract
+                    fit: BoxFit.cover,
+                    colorFilter:
+                        ColorFilter.mode(Colors.black38, BlendMode.darken),
+                  )),
+              accountName: Text(
+                authProvider.userProfile?.displayName ?? 'PathX User',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+              accountEmail: Text(
+                authProvider.userProfile?.email ?? '',
+                style: GoogleFonts.poppins(),
+              ),
+              currentAccountPicture: CircleAvatar(
+                backgroundColor: Colors.white,
+                child: Text(
+                  (authProvider.userProfile?.displayName ?? 'P')[0]
+                      .toUpperCase(),
+                  style: GoogleFonts.poppins(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue.shade800),
                 ),
-              ]
-            : null,
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.person_outline, color: Colors.grey.shade700),
+              title: Text('Profile',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context); // Close the drawer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const ProfileScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading:
+                  Icon(Icons.settings_outlined, color: Colors.grey.shade700),
+              title: Text('Settings',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                // Navigate to settings (placeholder)
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.support_agent_outlined,
+                  color: Colors.grey.shade700),
+              title: Text('Support',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                // Navigate to support (placeholder)
+              },
+            ),
+            ListTile(
+              leading:
+                  Icon(Icons.add_box_outlined, color: Colors.grey.shade700),
+              title: Text('Add Features / Course',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+              onTap: () {
+                Navigator.pop(context);
+                // Navigate to add features (placeholder)
+              },
+            ),
+            const Spacer(),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.redAccent),
+              title: Text('Logout',
+                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w500, color: Colors.redAccent)),
+              onTap: () async {
+                setState(() => _isLoading = true);
+                await authProvider.signOut();
+                if (mounted) {
+                  setState(() => _isLoading = false);
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
       body: IndexedStack(
         index: _selectedIndex,
         children: _screens,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        selectedItemColor: Colors.blue.shade700,
-        unselectedItemColor: Colors.grey.shade500,
-        selectedLabelStyle: GoogleFonts.poppins(fontSize: 12),
-        unselectedLabelStyle: GoogleFonts.poppins(fontSize: 12),
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.work_outline),
-            activeIcon: Icon(Icons.work),
-            label: 'Jobs',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.explore_outlined),
-            activeIcon: Icon(Icons.explore),
-            label: 'Explore',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          )
+        ]),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+          backgroundColor: Colors.white,
+          selectedItemColor: Colors.blue.shade700,
+          unselectedItemColor: Colors.grey.shade500,
+          selectedLabelStyle:
+              GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600),
+          unselectedLabelStyle:
+              GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500),
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.work_outline),
+              activeIcon: Icon(Icons.work),
+              label: 'Jobs',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.school_outlined),
+              activeIcon: Icon(Icons.school),
+              label: 'Learn',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -98,11 +196,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case 0:
         return 'Job Recommendations';
       case 1:
-        return 'Explore';
-      case 2:
-        return 'My Profile';
+        return 'Learning Path';
       default:
-        return 'Career Guide';
+        return 'Path-X';
     }
   }
 }

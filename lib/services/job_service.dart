@@ -1,139 +1,98 @@
-import 'package:mongo_dart/mongo_dart.dart';
 import '../models/job_model.dart';
-import 'mongo_db_service.dart';
 
 class JobService {
-  static final MongoDBService _mongoDBService = MongoDBService();
-  static bool _isInitialized = false;
-  static final List<Job> _cachedJobs = [];
+  static final List<Job> _cachedJobs = [
+    Job(
+      roleTitle: 'Software Engineer',
+      averageSalary: '\$100,000 - \$150,000',
+      education: 'Bachelor\'s in Computer Science or related field',
+      jobGrowthOutlook: 'Very High (22% over 10 years)',
+      coreSkills: ['Flutter', 'Dart', 'Firebase', 'Git', 'Agile'],
+      learningResources: [
+        LearningResource(
+          title: 'Flutter Official Documentation',
+          platform: 'Documentation',
+          url: 'https://flutter.dev/docs',
+          courses: ['The official guides and API references for Flutter.'],
+        ),
+      ],
+    ),
+    Job(
+      roleTitle: 'Data Scientist',
+      averageSalary: '\$120,000 - \$160,000',
+      education: 'Master\'s or Ph.D in Statistics, Math, or Computer Science',
+      jobGrowthOutlook: 'High (15% over 10 years)',
+      coreSkills: ['Python', 'SQL', 'Machine Learning', 'Data Analysis'],
+      learningResources: [
+        LearningResource(
+          title: 'Intro to Machine Learning',
+          platform: 'Course',
+          url: 'https://coursera.org',
+          courses: ['A comprehensive beginner course to ML.'],
+        ),
+      ],
+    ),
+    Job(
+      roleTitle: 'UX/UI Designer',
+      averageSalary: '\$80,000 - \$130,000',
+      education: 'Bachelor\'s in Design, HCI or equivalent bootcamp experience',
+      jobGrowthOutlook: 'Good (10% over 10 years)',
+      coreSkills: ['Figma', 'Prototyping', 'User Research', 'Wireframing'],
+      learningResources: [
+        LearningResource(
+          title: 'Google UX Design Certificate',
+          platform: 'Course',
+          url: 'https://coursera.org',
+          courses: ['Learn the fundamentals of UX design.'],
+        ),
+      ],
+    ),
+  ];
 
-  // Initialize the service and connect to MongoDB
-  static Future<void> _initialize() async {
-    if (!_isInitialized) {
-      await _mongoDBService.connect();
-      _isInitialized = true;
-    }
-  }
-
-  // Get all jobs from MongoDB
+  // Get all jobs (Mocked)
   static Future<List<Job>> getJobs() async {
-    if (_cachedJobs.isNotEmpty) {
-      return _cachedJobs;
-    }
-
-    try {
-      await _initialize();
-      final collection = _mongoDBService.collection('jobs');
-      
-      final jobsData = await collection.find().toList();
-      
-      _cachedJobs.clear();
-      for (var jobData in jobsData) {
-        try {
-          _cachedJobs.add(Job.fromJson(jobData));
-        } catch (e) {
-          print('Error parsing job data: $e');
-        }
-      }
-      
-      return _cachedJobs;
-    } catch (e) {
-      print('Error loading jobs from MongoDB: $e');
-      return [];
-    }
+    return _cachedJobs;
   }
 
   /// Get a specific job by its title (case-insensitive)
-  /// Returns null if no job is found
   static Future<Job?> getJobByTitle(String title) async {
     try {
-      await _initialize();
-      final collection = _mongoDBService.collection('jobs');
-      
-      final jobData = await collection.findOne({
-        'roleTitle': {'\$regex': '^${title.trim()}\\b', 'options': 'i'}
-      });
-      
-      return jobData != null ? Job.fromJson(jobData) : null;
+      return _cachedJobs.firstWhere(
+        (job) =>
+            job.roleTitle.toLowerCase().contains(title.toLowerCase().trim()),
+      );
     } catch (e) {
-      print('Error finding job "$title": $e');
-      return null;
+      return null; // Equivalent to orElse returning null
     }
   }
 
   /// Get learning resources for a specific job
-  /// Returns empty list if job is not found or has no resources
-  static Future<List<LearningResource>> getLearningResources(String jobTitle) async {
-    try {
-      final job = await getJobByTitle(jobTitle);
-      return job?.learningResources ?? [];
-    } catch (e) {
-      print('Error getting learning resources for "$jobTitle": $e');
-      return [];
-    }
+  static Future<List<LearningResource>> getLearningResources(
+      String jobTitle) async {
+    final job = await getJobByTitle(jobTitle);
+    return job?.learningResources ?? [];
   }
 
-  // Add a new job to the database
+  // Add a new job (Mocked)
   static Future<bool> addJob(Job job) async {
-    try {
-      await _initialize();
-      final collection = _mongoDBService.collection('jobs');
-      
-      await collection.insertOne(job.toJson());
-      _cachedJobs.add(job); // Update cache
-      
-      return true;
-    } catch (e) {
-      print('Error adding job: $e');
-      return false;
-    }
+    _cachedJobs.add(job);
+    return true;
   }
 
-  // Update an existing job
+  // Update an existing job (Mocked)
   static Future<bool> updateJob(String title, Job updatedJob) async {
-    try {
-      await _initialize();
-      final collection = _mongoDBService.collection('jobs');
-      
-      final result = await collection.updateOne(
-        where.eq('roleTitle', title),
-        {
-          '\$set': updatedJob.toJson(),
-        },
-      );
-      
-      // Update cache if needed
-      if (result.isSuccess && _cachedJobs.isNotEmpty) {
-        final index = _cachedJobs.indexWhere((j) => j.roleTitle == title);
-        if (index != -1) {
-          _cachedJobs[index] = updatedJob;
-        }
-      }
-      
-      return result.isSuccess;
-    } catch (e) {
-      print('Error updating job: $e');
-      return false;
+    final index = _cachedJobs.indexWhere((j) => j.roleTitle == title);
+    if (index != -1) {
+      _cachedJobs[index] = updatedJob;
+      return true;
     }
+    return false;
   }
 
-  // Delete a job by title
+  // Delete a job by title (Mocked)
   static Future<bool> deleteJob(String title) async {
-    try {
-      await _initialize();
-      final collection = _mongoDBService.collection('jobs');
-      
-      final result = await collection.deleteOne(where.eq('roleTitle', title));
-      
-      // Update cache if needed
-      if (result.isSuccess && _cachedJobs.isNotEmpty) {
-        _cachedJobs.removeWhere((j) => j.roleTitle == title);
-      }
-      
-      return result.isSuccess;
-    } catch (e) {
-      print('Error deleting job: $e');
-      return false;
-    }
+    final originalLength = _cachedJobs.length;
+    _cachedJobs.removeWhere((j) => j.roleTitle == title);
+    return _cachedJobs.length < originalLength;
   }
 }

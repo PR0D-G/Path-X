@@ -1,36 +1,30 @@
 import 'package:career_guide/screens/auth/login_screen.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'firebase_options.dart';
 import 'screens/user_check_screen.dart';
 import 'screens/questionnaire_screen.dart';
 import 'screens/learning_path_screen.dart';
 import 'providers/auth_provider.dart';
-import 'services/mongo_db_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  
+
   // Load environment variables
-  await dotenv.load();
-  
-  // Initialize MongoDB connection
   try {
-    final mongoDBService = MongoDBService();
-    await mongoDBService.connect();
-    print('MongoDB connection established');
+    await dotenv.load(fileName: ".env");
   } catch (e) {
-    print('Error connecting to MongoDB: $e');
+    print("Warning: Failed to load .env file. $e");
   }
-  
+
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: dotenv.env['SUPABASE_URL'] ?? '',
+    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
+  );
+
   runApp(const MyApp());
 }
 
@@ -46,8 +40,16 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'PathX',
-        theme: ThemeData().copyWith(
-          scaffoldBackgroundColor: const Color.fromRGBO(0, 0, 0, 1),
+        theme: ThemeData(
+          brightness: Brightness.light,
+          primarySwatch: Colors.blue,
+          scaffoldBackgroundColor: Colors.grey.shade50,
+          textTheme: GoogleFonts.poppinsTextTheme(),
+          appBarTheme: AppBarTheme(
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.blue.shade900,
+            elevation: 0,
+          ),
         ),
         routes: {
           '/': (context) => const AuthWrapper(),
@@ -76,14 +78,14 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+    return StreamBuilder<AuthState>(
+      stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.active) {
-          final user = snapshot.data;
+          final session = snapshot.data?.session;
 
           // User is signed in
-          if (user != null) {
+          if (session != null) {
             return const UserCheckScreen();
           }
 

@@ -10,8 +10,8 @@ plugins {
 
 android {
     namespace = "com.example.path_x"
-    compileSdk = 34  // Update to the latest SDK version
-    ndkVersion = "25.1.8937393"  // Update to the latest NDK version if needed
+    compileSdk = 36  // Update to the latest SDK version
+    ndkVersion = "27.0.12077973"  // Update to the latest NDK version if needed
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8

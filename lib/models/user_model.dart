@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class UserProfile {
   final String uid;
   final String? email;
@@ -48,8 +46,8 @@ class UserProfile {
       'assessmentResults': assessmentResults,
       'hasCompletedQuestionnaire': hasCompletedQuestionnaire,
       'interests': interests,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': Timestamp.fromDate(updatedAt),
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
@@ -69,8 +67,12 @@ class UserProfile {
           : null,
       hasCompletedQuestionnaire: map['hasCompletedQuestionnaire'] ?? false,
       interests: map['interests'],
-      createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt: map['createdAt'] != null
+          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      updatedAt: map['updatedAt'] != null
+          ? DateTime.tryParse(map['updatedAt'].toString()) ?? DateTime.now()
+          : DateTime.now(),
     );
   }
 
@@ -140,9 +142,9 @@ class UserProgress {
       'jobRoleId': jobRoleId,
       'completedLessons': completedLessons,
       'progressPercentage': progressPercentage,
-      'lastAccessed': Timestamp.fromDate(lastAccessed),
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': Timestamp.fromDate(updatedAt),
+      'lastAccessed': lastAccessed.toIso8601String(),
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
@@ -154,10 +156,15 @@ class UserProgress {
       completedLessons:
           Map<String, dynamic>.from(map['completedLessons'] ?? {}),
       progressPercentage: (map['progressPercentage'] ?? 0.0).toDouble(),
-      lastAccessed:
-          (map['lastAccessed'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      updatedAt: (map['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      lastAccessed: map['lastAccessed'] != null
+          ? DateTime.tryParse(map['lastAccessed'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      createdAt: map['createdAt'] != null
+          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      updatedAt: map['updatedAt'] != null
+          ? DateTime.tryParse(map['updatedAt'].toString()) ?? DateTime.now()
+          : DateTime.now(),
     );
   }
 

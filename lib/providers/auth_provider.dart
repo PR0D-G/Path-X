@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
 import '../models/user_model.dart';
 
 class AppAuthProvider with ChangeNotifier {
   final AuthService _auth = AuthService();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   User? _user;
   UserProfile? _userProfile;
@@ -38,7 +37,7 @@ class AppAuthProvider with ChangeNotifier {
     _auth.user.listen((user) async {
       _user = user;
       if (user != null) {
-        await loadUserProfile(user.uid);
+        await loadUserProfile(user.id);
       } else {
         _userProfile = null;
       }
@@ -46,21 +45,23 @@ class AppAuthProvider with ChangeNotifier {
     });
   }
 
-  // Load user profile from Firestore
+  // Load user profile from Supabase Database
   Future<void> loadUserProfile(String uid) async {
     try {
-      final doc = await _firestore.collection('users').doc(uid).get();
-      if (doc.exists) {
-        final data = Map<String, dynamic>.from(doc.data()!);
-        data['uid'] = uid;
+      final data =
+          await _supabase.from('users').select().eq('id', uid).maybeSingle();
+
+      if (data != null) {
         _userProfile = UserProfile.fromMap(data);
       } else {
         // Create a new profile if missing
         _userProfile = UserProfile(
           uid: uid,
           email: _user?.email,
-          displayName: _user?.displayName ?? _user?.email?.split('@').first,
-          photoURL: _user?.photoURL,
+          displayName: _user?.userMetadata?['display_name'] ??
+              _user?.userMetadata?['full_name'] ??
+              _user?.email?.split('@').first,
+          photoURL: _user?.userMetadata?['avatar_url'],
           skills: [],
         );
         await _saveUserProfile();
@@ -70,21 +71,26 @@ class AppAuthProvider with ChangeNotifier {
       _userProfile = UserProfile(
         uid: uid,
         email: _user?.email,
-        displayName: _user?.displayName ?? _user?.email?.split('@').first,
-        photoURL: _user?.photoURL,
+        displayName: _user?.userMetadata?['display_name'] ??
+            _user?.userMetadata?['full_name'] ??
+            _user?.email?.split('@').first,
+        photoURL: _user?.userMetadata?['avatar_url'],
         skills: [],
       );
     }
   }
 
-  // Save user profile to Firestore
+  // Save user profile to Supabase Database
   Future<void> _saveUserProfile() async {
     if (_userProfile == null) return;
     try {
-      await _firestore
-          .collection('users')
-          .doc(_userProfile!.uid)
-          .set(_userProfile!.toMap());
+      final map = _userProfile!.toMap();
+      // Ensure we use 'id' instead of 'uid' for supabase primary key mapping if needed.
+      // UserProfile map uses 'uid', but the table has 'id'
+      map['id'] = map['uid'];
+      map.remove('uid');
+
+      await _supabase.from('users').upsert(map);
     } catch (e) {
       debugPrint('Error saving user profile: $e');
       rethrow;
@@ -111,29 +117,20 @@ class AppAuthProvider with ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      final userCredential = await _auth.signInWithEmail(email, password);
-      _user = userCredential.user;
+      final authResponse = await _auth.signInWithEmail(email, password);
+      _user = authResponse.user;
 
       if (_user != null) {
-        await loadUserProfile(_user!.uid);
+        await loadUserProfile(_user!.id);
       }
 
       return _user;
-    } on FirebaseAuthException catch (e) {
-      switch (e.code) {
-        case 'user-not-found':
-          _error = 'No user found with this email.';
-          break;
-        case 'wrong-password':
-          _error = 'Incorrect password.';
-          break;
-        default:
-          _error = e.message ?? 'An error occurred during sign in.';
-      }
-      return null;
+    } on AuthException catch (e) {
+      _error = e.message;
+      rethrow;
     } catch (e) {
       _error = e.toString();
-      return null;
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -149,66 +146,43 @@ class AppAuthProvider with ChangeNotifier {
       notifyListeners();
 
       if (email.isEmpty || password.isEmpty) {
-        throw FirebaseAuthException(
-          code: 'invalid-email-or-password',
-          message: 'Email and password cannot be empty',
-        );
+        throw AuthException('Email and password cannot be empty');
       }
 
-      final userCredential = await _auth.signUpWithEmail(email, password,
+      final authResponse = await _auth.signUpWithEmail(email, password,
           displayName: displayName);
 
-      if (userCredential.user == null) {
-        throw FirebaseAuthException(
-          code: 'user-creation-failed',
-          message: 'Failed to create user account',
+      if (authResponse.user == null) {
+        throw AuthException('Failed to create user account');
+      }
+
+      _user = authResponse.user;
+
+      // Only create Supabase profile and fetch if they are immediately signed in
+      if (authResponse.session != null) {
+        _userProfile = UserProfile(
+          uid: _user!.id,
+          email: _user!.email,
+          displayName: displayName ??
+              _user?.userMetadata?['display_name'] ??
+              _user!.email?.split('@').first,
+          photoURL: _user?.userMetadata?['avatar_url'],
+          skills: [],
+          hasCompletedQuestionnaire: false,
         );
+
+        await _saveUserProfile();
+        await loadUserProfile(_user!.id);
       }
-
-      _user = userCredential.user;
-
-      // ✅ Ensure FirebaseAuth user has a displayName
-      if (displayName != null && displayName.isNotEmpty) {
-        await _user!.updateDisplayName(displayName);
-        await _user!.reload();
-        _user = FirebaseAuth.instance.currentUser;
-      }
-
-      // Create Firestore profile
-      _userProfile = UserProfile(
-        uid: _user!.uid,
-        email: _user!.email,
-        displayName:
-            _user!.displayName ?? displayName ?? _user!.email?.split('@').first,
-        photoURL: _user!.photoURL,
-        skills: [],
-        hasCompletedQuestionnaire: false,
-      );
-
-      await _saveUserProfile();
-
-      await loadUserProfile(_user!.uid);
 
       notifyListeners();
       return _user;
-    } on FirebaseAuthException catch (e) {
-      switch (e.code) {
-        case 'email-already-in-use':
-          _error = 'An account already exists with this email.';
-          break;
-        case 'invalid-email':
-          _error = 'The email address is not valid.';
-          break;
-        case 'weak-password':
-          _error = 'The password is too weak.';
-          break;
-        default:
-          _error = e.message ?? 'An error occurred during registration.';
-      }
-      return null;
+    } on AuthException catch (e) {
+      _error = e.message;
+      rethrow;
     } catch (e) {
       _error = e.toString();
-      return null;
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -222,16 +196,34 @@ class AppAuthProvider with ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      final userCredential = await _auth.signInWithGoogle();
-      _user = userCredential.user;
+      await _auth.signInWithGoogle();
+      // On web this redirects, so we don't get a user immediately back here.
+      // The onAuthStateChange stream handles subsequent logic.
+      return _user;
+    } on AuthException catch (e) {
+      _error = e.message;
+      return null;
+    } catch (e) {
+      _error = e.toString();
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
-      if (_user != null) {
-        await loadUserProfile(_user!.uid);
-      }
+  // Sign in with LinkedIn
+  Future<User?> signInWithLinkedIn() async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      await _auth.signInWithLinkedIn();
 
       return _user;
-    } on FirebaseAuthException catch (e) {
-      _error = e.message ?? 'An error occurred during Google sign in.';
+    } on AuthException catch (e) {
+      _error = e.message;
       return null;
     } catch (e) {
       _error = e.toString();
@@ -269,8 +261,8 @@ class AppAuthProvider with ChangeNotifier {
       notifyListeners();
 
       await _auth.sendPasswordResetEmail(email);
-    } on FirebaseAuthException catch (e) {
-      _error = e.message ?? 'Failed to send password reset email.';
+    } on AuthException catch (e) {
+      _error = e.message;
       rethrow;
     } catch (e) {
       _error = e.toString();

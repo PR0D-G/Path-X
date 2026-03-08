@@ -1,5 +1,5 @@
 import 'dart:io'; // Required for Image.file
-import 'package:firebase_core/firebase_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -62,28 +62,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadUserProfile() async {
     try {
       final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-      
+
       // First, ensure we have the user's profile data
       if (authProvider.userProfile == null && authProvider.user != null) {
-        await authProvider.loadUserProfile(authProvider.user!.uid);
+        await authProvider.loadUserProfile(authProvider.user!.id);
       }
-      
+
       if (mounted) {
         final profile = authProvider.userProfile;
         final user = authProvider.user;
-        
+
         setState(() {
           // Use displayName from profile if available, otherwise use from user object
-          _nameController.text = profile?.displayName ?? 
-                               user?.displayName ?? 
-                               user?.email?.split('@').first ?? 
-                               'User';
+          _nameController.text = profile?.displayName ??
+              user?.userMetadata?['display_name'] ??
+              user?.email?.split('@').first ??
+              'User';
           _emailController.text = user?.email ?? '';
           _bioController.text = profile?.bio ?? '';
           _locationController.text = profile?.location ?? '';
           _educationLevelController.text = profile?.educationLevel ?? '';
           _careerGoalController.text = profile?.careerGoal ?? '';
-          _profileImageUrl = profile?.photoURL ?? user?.photoURL;
+          _profileImageUrl =
+              profile?.photoURL ?? user?.userMetadata?['avatar_url'];
         });
       }
     } catch (e) {
@@ -119,17 +120,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() => _isLoading = true);
-    
+
     try {
       final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
       final user = authProvider.user;
-      
+
       if (user != null) {
         // Update user profile in Firestore
         final updatedProfile = UserProfile(
-          uid: user.uid,
+          uid: user.id,
           email: _emailController.text.trim(),
           displayName: _nameController.text.trim(),
           photoURL: _profileImageUrl,
@@ -138,22 +139,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
           educationLevel: _educationLevelController.text.trim(),
           careerGoal: _careerGoalController.text.trim(),
           skills: authProvider.userProfile?.skills ?? [],
-          hasCompletedQuestionnaire: authProvider.userProfile?.hasCompletedQuestionnaire ?? false,
+          hasCompletedQuestionnaire:
+              authProvider.userProfile?.hasCompletedQuestionnaire ?? false,
           interests: authProvider.userProfile?.interests,
           // Preserve timestamps
           createdAt: authProvider.userProfile?.createdAt,
           updatedAt: DateTime.now(),
         );
-        
+
         // Update in Firestore
         await authProvider.updateUserProfile(updatedProfile);
-        
+
         // Update in Firebase Auth if name changed
-        if (user.displayName != _nameController.text.trim()) {
-          await user.updateDisplayName(_nameController.text.trim());
-          await user.reload();
+        if (user.userMetadata?['display_name'] != _nameController.text.trim()) {
+          // Supabase handles name via user update
+          await Supabase.instance.client.auth.updateUser(
+            UserAttributes(data: {'display_name': _nameController.text.trim()}),
+          );
         }
-        
+
         if (mounted) {
           setState(() => _isEditing = false);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -164,12 +168,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         }
       }
-    } on FirebaseException catch (e) {
-      debugPrint('Firebase error saving profile: $e');
+    } on Exception catch (e) {
+      debugPrint('Database or Auth error saving profile: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Firebase error: ${e.message}'),
+            content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -378,7 +382,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final authProvider = Provider.of<AppAuthProvider>(context);
     final user = authProvider.user;
     final userProfile = authProvider.userProfile;
-    
+
     // If the path is from the network (http), use Image.network.
     // If it's a local file path, use Image.file.
     // Otherwise, show the icon.
@@ -429,10 +433,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 16),
           // Display user's name
           Text(
-            userProfile?.displayName ?? 
-            user?.displayName ?? 
-            user?.email?.split('@').first ?? 
-            'User',
+            userProfile?.displayName ??
+                user?.userMetadata?['display_name'] ??
+                user?.email?.split('@').first ??
+                'User',
             style: GoogleFonts.poppins(
               fontSize: 24,
               fontWeight: FontWeight.bold,

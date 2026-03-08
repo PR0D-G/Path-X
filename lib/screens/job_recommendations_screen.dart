@@ -28,30 +28,19 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
   }
 
   late Future<List<Job>> _jobsFuture;
-  // final JobService _jobService = JobService(); // Unused
 
   @override
   void initState() {
     super.initState();
-    _loadJobs();
+    _jobsFuture = _loadAndFilterJobs();
   }
 
-  Future<void> _loadJobs() async {
+  Future<List<Job>> _loadAndFilterJobs() async {
     try {
       final jobs = await JobService.getJobs();
-
-      // Filter jobs based on assessment results
-      final filteredJobs =
-          _filterJobsByAssessment(jobs, widget.assessmentResults);
-
-      setState(() {
-        _jobsFuture = Future.value(filteredJobs);
-      });
+      return _filterJobsByAssessment(jobs, widget.assessmentResults);
     } catch (e) {
-      // Handle error
-      setState(() {
-        _jobsFuture = Future.error('Failed to load jobs');
-      });
+      throw Exception('Failed to load jobs');
     }
   }
 
@@ -69,7 +58,8 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
       final requiredSkills = job.coreSkills.map((s) => s.toLowerCase()).toSet();
       final userSkillsLower = skills.map((s) => s.toLowerCase()).toSet();
 
-      final matchingSkills = requiredSkills.intersection(userSkillsLower).length;
+      final matchingSkills =
+          requiredSkills.intersection(userSkillsLower).length;
       final matchPercentage =
           (matchingSkills / requiredSkills.length * 100).round();
 
@@ -148,40 +138,8 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            '',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              fontSize: 20,
-            ),
-          ),
-          bottom: TabBar(
-            tabs: const [
-              Tab(text: 'Recommended Jobs'),
-              Tab(text: 'My Profile'),
-            ],
-            labelStyle: GoogleFonts.poppins(
-              fontWeight: FontWeight.w500,
-              fontSize: 14,
-            ),
-            indicatorColor: Colors.blue.shade800,
-            unselectedLabelColor: Colors.grey,
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            // Recommended Jobs Tab
-            _buildRecommendationsTab(context),
-            // Profile Summary Tab
-            _buildProfileTab(context),
-          ],
-        ),
-      ),
-    );
+    // Top-level space/AppBar is removed as it's now embedded in HomeScreen
+    return _buildRecommendationsTab(context);
   }
 
   // Sort jobs by match percentage (highest first)
@@ -420,217 +378,6 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
           },
         );
       },
-    );
-  }
-
-  Widget _buildProfileTab(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Your Profile',
-            style: GoogleFonts.poppins(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.blue.shade900,
-            ),
-          ),
-          const SizedBox(height: 20),
-          _buildProfileInfoCard(),
-          const SizedBox(height: 20),
-          _buildSkillsCard(),
-          const SizedBox(height: 20),
-          _buildAssessmentResultsCard(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfileInfoCard() {
-    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-    final userProfile = authProvider.userProfile;
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Profile Information',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.blue.shade900,
-              ),
-            ),
-            const Divider(height: 24),
-            _buildInfoRow('Name', userProfile?.uid ?? 'Not provided'),
-            _buildInfoRow('Education Level',
-                userProfile?.educationLevel ?? 'Not specified'),
-            _buildInfoRow(
-                'Skill Level',
-                userProfile?.skills?.join(', ') ??
-                    'Not specified'), // Fixed: join skills list
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSkillsCard() {
-    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-    final skills = authProvider.userProfile?.skills ?? [];
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Your Skills',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.blue.shade900,
-              ),
-            ),
-            const Divider(height: 24),
-            if (skills.isEmpty)
-              Text(
-                'No skills added yet.',
-                style: GoogleFonts.poppins(
-                  color: Colors.grey.shade600,
-                  fontStyle: FontStyle.italic,
-                ),
-              )
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: skills
-                    .map((skill) => Chip(
-                          label: Text(skill),
-                          backgroundColor: Colors.blue.shade50,
-                          labelStyle: TextStyle(color: Colors.blue.shade800),
-                        ))
-                    .toList(),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAssessmentResultsCard() {
-    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-    final assessmentResults = authProvider.userProfile?.assessmentResults ?? {};
-
-    if (assessmentResults.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Assessment Results',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.blue.shade900,
-              ),
-            ),
-            const Divider(height: 24),
-            ...assessmentResults.entries.map((entry) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Category ${assessmentResults.keys.toList().indexOf(entry.key) + 1}',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        Text(
-                          '${(entry.value * 100).toStringAsFixed(0)}%',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
-                            color: _getScoreColor(entry.value),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    LinearProgressIndicator(
-                      value: entry.value,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        _getScoreColor(entry.value),
-                      ),
-                      minHeight: 8,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ],
-                ),
-              );
-            }), // Removed unnecessary toList()
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              '$label:',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.grey.shade800,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 

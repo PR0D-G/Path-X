@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 import '../services/user_service.dart';
 
 class ProgressProvider with ChangeNotifier {
   final UserService _userService = UserService();
-  
+
   Map<String, UserProgress> _userProgress = {};
   bool _isLoading = false;
   String? _error;
@@ -22,7 +22,7 @@ class ProgressProvider with ChangeNotifier {
 
   // Load all user progress
   Future<void> loadUserProgress() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
+    final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
 
     try {

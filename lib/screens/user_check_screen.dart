@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 import 'questionnaire_screen.dart';
-import 'job_recommendations_screen.dart';
+import 'home_screen.dart';
 
 class UserCheckScreen extends StatefulWidget {
   const UserCheckScreen({super.key});
@@ -12,60 +12,46 @@ class UserCheckScreen extends StatefulWidget {
 }
 
 class _UserCheckScreenState extends State<UserCheckScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // Use addPostFrameCallback to ensure the build context is available
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      checkUserAndNavigate();
-    });
-  }
-
-  Future<void> checkUserAndNavigate() async {
-    // Get the current Firebase user
-    User? user = FirebaseAuth.instance.currentUser;
-
-    // Ensure there is a logged-in user before proceeding
-    if (user != null) {
-      // Check for the user's document in the 'users' collection in Firestore
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      // If the document does NOT exist, the user is new.
-      if (!doc.exists) {
-        // Navigate to the QuestionScreen for new users
-        if (mounted) {
-          // Check if the widget is still in the tree
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const QuestionnaireScreen()),
-          );
-        }
-      } else {
-        // If the document exists, the user is returning.
-        if (mounted) {
-          // Check if the widget is still in the tree
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-                builder: (context) => JobRecommendationsScreen(
-                      assessmentResults: {}, // Pass an empty map or fetch the actual assessment results
-                    )),
-          );
-        }
-      }
-    }
-  }
+  bool _navigating = false;
 
   @override
   Widget build(BuildContext context) {
-    // Display a loading indicator while the check is in progress
-    return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(
-          color: Colors.white, // Or your app's theme color
-        ),
-      ),
+    return Consumer<AppAuthProvider>(
+      builder: (context, authProvider, child) {
+        // Wait for the provider to fully load the profile
+        if (authProvider.userProfile == null) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(color: Colors.blue),
+            ),
+          );
+        }
+
+        // Once the profile is loaded, safely navigate away
+        if (!_navigating) {
+          _navigating = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+
+            if (authProvider.shouldShowQuestionnaire) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                    builder: (context) => const QuestionnaireScreen()),
+              );
+            } else {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (context) => const HomeScreen()),
+              );
+            }
+          });
+        }
+
+        return const Scaffold(
+          body: Center(
+            child: CircularProgressIndicator(color: Colors.blue),
+          ),
+        );
+      },
     );
   }
 }
