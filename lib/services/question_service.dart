@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final supabase = Supabase.instance.client;
@@ -7,10 +8,19 @@ class QuestionService {
     List<Map<String, dynamic>> questions = [];
 
     try {
-      // 1. Connection check (Awaited to ensure connectivity early)
-      await supabase.from('questions').select().limit(1);
+      debugPrint('Fetching quiz questions in strict order...');
+      String tableName = 'questions';
 
-      // RIASEC categories
+      // Verify table name exists or try fallback
+      try {
+        await supabase.from(tableName).select().limit(1);
+      } catch (e) {
+        debugPrint(
+            'Notice: "questions" table not found, trying "assessment_questions"...');
+        tableName = 'assessment_questions';
+      }
+
+      // 1. RIASEC (18 questions total: 3 per category)
       final riasecCategories = [
         'Realistic',
         'Investigative',
@@ -20,63 +30,74 @@ class QuestionService {
         'Conventional'
       ];
 
-      List<Map<String, dynamic>> riasecQuestions = [];
-      for (var category in riasecCategories) {
+      try {
         final res = await supabase
-            .from('questions')
+            .from(tableName)
             .select()
-            .eq('category', category); // Fetch all to shuffle manually
+            .filter('category', 'in', '(${riasecCategories.join(",")})');
 
-        final list = List<Map<String, dynamic>>.from(res);
-        list.shuffle();
-        riasecQuestions.addAll(list.take(3));
+        final allRiasec = List<Map<String, dynamic>>.from(res as List);
+        for (var category in riasecCategories) {
+          final categoryQuestions = allRiasec
+              .where((q) => q['category'] == category)
+              .toList()
+            ..shuffle();
+          if (categoryQuestions.isNotEmpty) {
+            questions.addAll(categoryQuestions.take(3));
+          }
+        }
+      } catch (e) {
+        debugPrint('Notice: Error fetching RIASEC questions: $e');
       }
 
-      // Shuffle the RIASEC block so categories are mixed
-      riasecQuestions.shuffle();
-      questions.addAll(riasecQuestions);
+      // 2. Aptitude (6 questions total: 2 per category)
+      final aptitudeCategories = ['Logic', 'Reasoning', 'Pattern'];
 
-      // Aptitude (Logic, Reasoning, Pattern)
-      List<Map<String, dynamic>> aptitudeQuestions = [];
+      try {
+        final res = await supabase
+            .from(tableName)
+            .select()
+            .filter('category', 'in', '(${aptitudeCategories.join(",")})');
 
-      // Logic
-      final logic =
-          await supabase.from('questions').select().eq('category', 'Logic');
-      final logicList = List<Map<String, dynamic>>.from(logic)..shuffle();
-      aptitudeQuestions.addAll(logicList.take(2));
+        final allAptitude = List<Map<String, dynamic>>.from(res as List);
+        for (var cat in aptitudeCategories) {
+          final catQuestions = allAptitude
+              .where((q) => q['category'] == cat)
+              .toList()
+            ..shuffle();
+          if (catQuestions.isNotEmpty) {
+            questions.addAll(catQuestions.take(2));
+          }
+        }
+      } catch (e) {
+        debugPrint('Notice: Error fetching Aptitude questions: $e');
+      }
 
-      // Reasoning
-      final reasoning =
-          await supabase.from('questions').select().eq('category', 'Reasoning');
-      final reasoningList = List<Map<String, dynamic>>.from(reasoning)
-        ..shuffle();
-      aptitudeQuestions.addAll(reasoningList.take(2));
+      // 3. Quick math (3 questions total)
+      try {
+        final math = await supabase.from('quick_math').select();
+        final mathList = List<Map<String, dynamic>>.from(math as List)
+          ..shuffle();
+        final selectedMath = mathList.take(3).map((m) {
+          m['isMath'] = true;
+          return m;
+        }).toList();
+        questions.addAll(selectedMath);
+      } catch (e) {
+        debugPrint('Notice: Error for quick_math: $e');
+      }
 
-      // Pattern
-      final pattern =
-          await supabase.from('questions').select().eq('category', 'Pattern');
-      final patternList = List<Map<String, dynamic>>.from(pattern)..shuffle();
-      aptitudeQuestions.addAll(patternList.take(2));
+      debugPrint('Order check: RIASEC block first, then Aptitude, then Math.');
+      debugPrint('Final count: ${questions.length} / 27');
 
-      // Shuffle the aptitude block together
-      aptitudeQuestions.shuffle();
-      questions.addAll(aptitudeQuestions);
+      if (questions.isEmpty) {
+        throw Exception('No questions found. Check your database tables.');
+      }
 
-      // Quick math (Appended at the end of the test)
-      final math = await supabase.from('quick_math').select();
-      final mathList = List<Map<String, dynamic>>.from(math)..shuffle();
-      final selectedMath = mathList.take(3).map((m) {
-        m['isMath'] = true;
-        return m;
-      }).toList();
-
-      questions.addAll(selectedMath);
-
-      // The final array consists of Shuffled RIASEC -> Shuffled Aptitude -> Math questions at the very end.
       return questions;
     } catch (e) {
-      // Return empty list on error
-      return [];
+      debugPrint('FATAL: fetchQuizQuestions failed: $e');
+      rethrow;
     }
   }
 }

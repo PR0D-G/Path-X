@@ -6,11 +6,8 @@ import '../providers/auth_provider.dart';
 import '../services/job_service.dart';
 
 class JobRecommendationsScreen extends StatefulWidget {
-  final Map<String, dynamic> assessmentResults;
-
   const JobRecommendationsScreen({
     super.key,
-    required this.assessmentResults,
   });
 
   @override
@@ -19,14 +16,6 @@ class JobRecommendationsScreen extends StatefulWidget {
 }
 
 class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
-  // Filter jobs based on assessment results
-  List<Job> _filterJobsByAssessment(
-      List<Job> jobs, Map<String, dynamic> assessmentResults) {
-    // For now, return all jobs. You can implement custom filtering logic here
-    // based on the assessmentResults to show more relevant jobs
-    return jobs;
-  }
-
   late Future<List<Job>> _jobsFuture;
 
   @override
@@ -37,36 +26,11 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
 
   Future<List<Job>> _loadAndFilterJobs() async {
     try {
-      final jobs = await JobService.getJobs();
-      return _filterJobsByAssessment(jobs, widget.assessmentResults);
+      // Use the new matching algorithm from JobService
+      return await JobService.getMatchedCareers();
     } catch (e) {
-      throw Exception('Failed to load jobs');
-    }
-  }
-
-  // Calculate match percentage based on skills
-  int _calculateMatchPercentage(Job job, [List<String>? userSkills]) {
-    try {
-      // Get user skills from auth provider if not provided
-      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-      final skills = userSkills ?? authProvider.userSkills;
-
-      // Avoid division by zero if a job has no core skills listed
-      if (job.coreSkills.isEmpty) return 0;
-      if (skills.isEmpty) return 0;
-
-      final requiredSkills = job.coreSkills.map((s) => s.toLowerCase()).toSet();
-      final userSkillsLower = skills.map((s) => s.toLowerCase()).toSet();
-
-      final matchingSkills =
-          requiredSkills.intersection(userSkillsLower).length;
-      final matchPercentage =
-          (matchingSkills / requiredSkills.length * 100).round();
-
-      return matchPercentage.clamp(0, 100);
-    } catch (e) {
-      debugPrint('Error calculating match percentage: $e');
-      return 0;
+      debugPrint('Error loading matched jobs: $e');
+      throw Exception('Failed to load job recommendations');
     }
   }
 
@@ -142,16 +106,9 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
     return _buildRecommendationsTab(context);
   }
 
-  // Sort jobs by match percentage (highest first)
+  // Sort jobs by match percentage (highest first) and filter
   List<Job> _sortJobsByMatch(List<Job> jobs) {
-    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-    final userSkills = authProvider.userProfile?.skills ?? [];
-
-    jobs.sort((a, b) {
-      final aMatch = _calculateMatchPercentage(a, userSkills);
-      final bMatch = _calculateMatchPercentage(b, userSkills);
-      return bMatch.compareTo(aMatch);
-    });
+    // The jobs coming from getMatchedCareers are already sorted and filtered
     return jobs;
   }
 
@@ -189,7 +146,6 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
           itemCount: sortedJobs.length,
           itemBuilder: (context, index) {
             final job = sortedJobs[index];
-            final matchPercentage = _calculateMatchPercentage(job);
             final matchingSkills = _getMatchingSkills(job);
             final missingSkills = _getMissingSkills(job);
 
@@ -226,22 +182,20 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: _getScoreColor(matchPercentage / 100)
-                                .withAlpha((255 * 0.1)
-                                    .round()), // Replaced withOpacity
+                            color: _getScoreColor(job.matchPercentage / 100)
+                                .withAlpha((255 * 0.1).round()),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: _getScoreColor(matchPercentage / 100)
-                                  .withAlpha((255 * 0.3)
-                                      .round()), // Replaced withOpacity
+                              color: _getScoreColor(job.matchPercentage / 100)
+                                  .withAlpha((255 * 0.3).round()),
                               width: 1,
                             ),
                           ),
                           child: Text(
-                            '$matchPercentage% Match',
+                            '${job.matchPercentage.toStringAsFixed(0)}% Match',
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.w600,
-                              color: _getScoreColor(matchPercentage / 100),
+                              color: _getScoreColor(job.matchPercentage / 100),
                               fontSize: 12,
                             ),
                           ),
@@ -323,9 +277,13 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () {
-                              _showJobDetails(
-                                  context, job, matchingSkills, missingSkills);
+                            onPressed: () async {
+                              final details =
+                                  await JobService.getCareerDetails(job.id!);
+                              if (context.mounted) {
+                                _showJobDetails(context, job, matchingSkills,
+                                    missingSkills, details);
+                              }
                             },
                             style: OutlinedButton.styleFrom(
                               side: BorderSide(color: Colors.blue.shade600),
@@ -386,6 +344,7 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
     Job job,
     List<String> matchingSkills,
     List<String> missingSkills,
+    Map<String, List<String>> details,
   ) {
     showModalBottomSheet(
       context: context,
@@ -481,6 +440,103 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
                               backgroundColor: Colors.orange.shade50,
                               labelStyle:
                                   TextStyle(color: Colors.orange.shade800),
+                            ))
+                        .toList(),
+                  ),
+                ],
+
+                const SizedBox(height: 24),
+                // Additional Career Details fetched from Supabase
+                if (details['tasks']!.isNotEmpty) ...[
+                  Text(
+                    'Day in the Life (Tasks)',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...details['tasks']!.map((task) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('• ', style: TextStyle(fontSize: 16)),
+                            Expanded(
+                                child:
+                                    Text(task, style: GoogleFonts.poppins())),
+                          ],
+                        ),
+                      )),
+                  const SizedBox(height: 20),
+                ],
+
+                if (details['salary_levels']!.isNotEmpty) ...[
+                  Text(
+                    'Salary Levels',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...details['salary_levels']!.map((salary) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('• ', style: TextStyle(fontSize: 16)),
+                            Expanded(
+                                child:
+                                    Text(salary, style: GoogleFonts.poppins())),
+                          ],
+                        ),
+                      )),
+                  const SizedBox(height: 20),
+                ],
+
+                if (details['industries']!.isNotEmpty) ...[
+                  Text(
+                    'Top Industries',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: details['industries']!
+                        .map((ind) => Chip(
+                              label: Text(ind),
+                              backgroundColor: Colors.purple.shade50,
+                              labelStyle:
+                                  TextStyle(color: Colors.purple.shade800),
+                            ))
+                        .toList(),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
+                if (details['companies']!.isNotEmpty) ...[
+                  Text(
+                    'Top Companies Hiring',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: details['companies']!
+                        .map((comp) => Chip(
+                              label: Text(comp),
+                              backgroundColor: Colors.teal.shade50,
+                              labelStyle:
+                                  TextStyle(color: Colors.teal.shade800),
                             ))
                         .toList(),
                   ),

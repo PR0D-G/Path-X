@@ -6,18 +6,18 @@ import '../services/user_service.dart';
 class ProgressProvider with ChangeNotifier {
   final UserService _userService = UserService();
 
-  Map<String, UserProgress> _userProgress = {};
+  Map<int, UserProgress> _userProgress = {};
   bool _isLoading = false;
   String? _error;
 
   // Getters
-  Map<String, UserProgress> get userProgress => _userProgress;
+  Map<int, UserProgress> get userProgress => _userProgress;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  // Get progress for a specific job role
-  UserProgress? getProgressForJob(String jobRoleId) {
-    return _userProgress[jobRoleId];
+  // Get progress for a specific learning path
+  UserProgress? getProgressForPath(int learningPathId) {
+    return _userProgress[learningPathId];
   }
 
   // Load all user progress
@@ -33,7 +33,7 @@ class ProgressProvider with ChangeNotifier {
       final progressStream = _userService.getAllUserProgress();
       await for (final progressList in progressStream) {
         _userProgress = {
-          for (var progress in progressList) progress.jobRoleId: progress
+          for (var progress in progressList) progress.learningPathId: progress
         };
         notifyListeners();
       }
@@ -46,25 +46,40 @@ class ProgressProvider with ChangeNotifier {
     }
   }
 
-  // Mark a lesson as completed
-  Future<void> completeLesson({
-    required String jobRoleId,
-    required String lessonId,
-    required bool isCompleted,
+  // Update progress for a learning path
+  Future<void> updateProgress({
+    required int learningPathId,
+    required String status,
+    required int progress,
   }) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
     try {
       _isLoading = true;
       _error = null;
       notifyListeners();
 
-      await _userService.completeLesson(
-        jobRoleId: jobRoleId,
-        lessonId: lessonId,
-        isCompleted: isCompleted,
+      final currentProgress = _userProgress[learningPathId];
+      final updatedProgress = (currentProgress ??
+              UserProgress(
+                userId: userId,
+                learningPathId: learningPathId,
+                status: status,
+                progress: progress,
+                startedAt: status == 'in_progress' ? DateTime.now() : null,
+              ))
+          .copyWith(
+        status: status,
+        progress: progress,
+        completedAt: status == 'completed' ? DateTime.now() : null,
       );
 
-      // Reload progress after update
-      await loadUserProgress();
+      await _userService.updateUserProgress(updatedProgress);
+
+      // Local update
+      _userProgress[learningPathId] = updatedProgress;
+      notifyListeners();
     } catch (e) {
       _error = 'Failed to update progress: $e';
       debugPrint(_error);
@@ -75,37 +90,21 @@ class ProgressProvider with ChangeNotifier {
     }
   }
 
-  // Get completion status for a specific lesson
-  bool isLessonCompleted(String jobRoleId, String lessonId) {
-    final progress = _userProgress[jobRoleId];
-    if (progress == null) return false;
-    return progress.completedLessons[lessonId] == true;
+  // Get completion status for a specific path
+  bool isPathCompleted(int learningPathId) {
+    return _userProgress[learningPathId]?.status == 'completed';
   }
 
-  // Get completion percentage for a specific job role
-  double getCompletionPercentage(String jobRoleId) {
-    final progress = _userProgress[jobRoleId];
+  // Get completion percentage for a specific path
+  double getCompletionPercentage(int learningPathId) {
+    final progress = _userProgress[learningPathId];
     if (progress == null) return 0.0;
-    return progress.progressPercentage;
+    return progress.progress.toDouble();
   }
 
   // Clear all progress (for testing or account deletion)
   Future<void> clearProgress() async {
-    try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
-
-      // In a real app, you would delete the progress from Firestore here
-      // For now, we'll just clear the local state
-      _userProgress = {};
-    } catch (e) {
-      _error = 'Failed to clear progress: $e';
-      debugPrint(_error);
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    _userProgress = {};
+    notifyListeners();
   }
 }

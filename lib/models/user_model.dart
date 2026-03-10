@@ -33,42 +33,45 @@ class UserProfile {
         updatedAt = updatedAt ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
-    return {
-      'uid': uid,
+    final map = {
+      'id': uid,
       'email': email,
-      'displayName': displayName,
-      'photoURL': photoURL,
+      'display_name': displayName,
+      'avatar_url': photoURL,
       'bio': bio,
       'location': location,
       'skills': skills,
       'educationLevel': educationLevel,
-      'careerGoal': careerGoal,
-      'assessmentResults': assessmentResults,
+      'selected_career': careerGoal,
       'hasCompletedQuestionnaire': hasCompletedQuestionnaire,
       'interests': interests,
-      'createdAt': createdAt.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
+
+    // Remove null values to avoid errors if columns don't exist in Supabase
+    map.removeWhere((key, value) => value == null);
+    return map;
   }
 
   factory UserProfile.fromMap(Map<String, dynamic> map) {
     return UserProfile(
-      uid: map['uid'] ?? '',
+      uid: map['id']?.toString() ?? '',
       email: map['email'],
-      displayName: map['displayName'],
-      photoURL: map['photoURL'],
+      displayName: map['display_name'],
+      photoURL: map['avatar_url'],
       bio: map['bio'],
       location: map['location'],
       skills: map['skills'] != null ? List<String>.from(map['skills']) : null,
       educationLevel: map['educationLevel'],
-      careerGoal: map['careerGoal'],
+      careerGoal: map['selected_career'],
       assessmentResults: map['assessmentResults'] != null
           ? Map<String, dynamic>.from(map['assessmentResults'])
           : null,
       hasCompletedQuestionnaire: map['hasCompletedQuestionnaire'] ?? false,
       interests: map['interests'],
-      createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
+      createdAt: map['created_at'] != null
+          ? DateTime.tryParse(map['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
       updatedAt: map['updatedAt'] != null
           ? DateTime.tryParse(map['updatedAt'].toString()) ?? DateTime.now()
@@ -113,78 +116,69 @@ class UserProfile {
 }
 
 class UserProgress {
-  final String id;
+  final int? id;
   final String userId;
-  final String jobRoleId;
-  final Map<String, dynamic> completedLessons;
-  final double progressPercentage;
-  final DateTime lastAccessed;
-  final DateTime createdAt;
-  final DateTime updatedAt;
+  final int learningPathId;
+  final String status;
+  final int progress;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
 
   UserProgress({
-    required this.id,
+    this.id,
     required this.userId,
-    required this.jobRoleId,
-    required this.completedLessons,
-    required this.progressPercentage,
-    DateTime? lastAccessed,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  })  : lastAccessed = lastAccessed ?? DateTime.now(),
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+    required this.learningPathId,
+    required this.status,
+    required this.progress,
+    this.startedAt,
+    this.completedAt,
+  });
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
-      'userId': userId,
-      'jobRoleId': jobRoleId,
-      'completedLessons': completedLessons,
-      'progressPercentage': progressPercentage,
-      'lastAccessed': lastAccessed.toIso8601String(),
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
+      if (id != null) 'id': id,
+      'user_id': userId,
+      'learning_path_id': learningPathId,
+      'status': status,
+      'progress': progress,
+      'started_at': startedAt?.toIso8601String(),
+      'completed_at': completedAt?.toIso8601String(),
     };
   }
 
   factory UserProgress.fromMap(Map<String, dynamic> map) {
     return UserProgress(
-      id: map['id'] ?? '',
-      userId: map['userId'] ?? '',
-      jobRoleId: map['jobRoleId'] ?? '',
-      completedLessons:
-          Map<String, dynamic>.from(map['completedLessons'] ?? {}),
-      progressPercentage: (map['progressPercentage'] ?? 0.0).toDouble(),
-      lastAccessed: map['lastAccessed'] != null
-          ? DateTime.tryParse(map['lastAccessed'].toString()) ?? DateTime.now()
-          : DateTime.now(),
-      createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
-          : DateTime.now(),
-      updatedAt: map['updatedAt'] != null
-          ? DateTime.tryParse(map['updatedAt'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+      id: map['id'],
+      userId: map['user_id'] ?? '',
+      learningPathId: map['learning_path_id'] ?? 0,
+      status: map['status'] ?? 'not_started',
+      progress: map['progress'] ?? 0,
+      startedAt: map['started_at'] != null
+          ? DateTime.tryParse(map['started_at'])
+          : null,
+      completedAt: map['completed_at'] != null
+          ? DateTime.tryParse(map['completed_at'])
+          : null,
     );
   }
 
   UserProgress copyWith({
-    String? id,
+    int? id,
     String? userId,
-    String? jobRoleId,
-    Map<String, dynamic>? completedLessons,
-    double? progressPercentage,
-    DateTime? lastAccessed,
+    int? learningPathId,
+    String? status,
+    int? progress,
+    DateTime? startedAt,
+    DateTime? completedAt,
   }) {
     return UserProgress(
       id: id ?? this.id,
       userId: userId ?? this.userId,
-      jobRoleId: jobRoleId ?? this.jobRoleId,
-      completedLessons: completedLessons ?? this.completedLessons,
-      progressPercentage: progressPercentage ?? this.progressPercentage,
-      lastAccessed: lastAccessed ?? this.lastAccessed,
-      createdAt: this.createdAt,
-      updatedAt: DateTime.now(),
+      learningPathId: learningPathId ?? this.learningPathId,
+      status: status ?? this.status,
+      progress: progress ?? this.progress,
+      startedAt: startedAt ?? this.startedAt,
+      completedAt: completedAt ?? this.completedAt,
     );
   }
 }

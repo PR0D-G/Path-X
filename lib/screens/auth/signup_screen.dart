@@ -77,64 +77,25 @@ class _SignupScreenState extends State<SignupScreen> {
       });
 
       if (mounted && user != null) {
-        // The display name is now handled in the auth provider
-        debugPrint(
-            'User signed up successfully. Display name: ${user.userMetadata?['display_name']}');
-
         final session = Supabase.instance.client.auth.currentSession;
 
         if (session == null) {
-          // Email confirmation is strictly required because session is null
+          // Email confirmation is required
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                    'Account created! Please check your email to confirm your account and log in.'),
-                backgroundColor: Colors.blue,
-                behavior: SnackBarBehavior.floating,
-                margin: EdgeInsets.all(16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(10)),
-                ),
-                duration: Duration(seconds: 5),
-              ),
-            );
-
-            // Navigate back to login screen
+            _showSuccessSnackBar(
+                'Account created! Please check your email and confirm before logging in.');
             Navigator.pushReplacementNamed(context, '/login');
           }
         } else {
-          // Force a refresh of the user profile
           await authProvider.loadUserProfile(user.id);
-
-          // Show success message
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Account created successfully!'),
-                backgroundColor: Colors.green,
-                behavior: SnackBarBehavior.floating,
-                margin: EdgeInsets.all(16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(10)),
-                ),
-              ),
-            );
+            _showSuccessSnackBar('Account created successfully!');
+            await Future.delayed(const Duration(milliseconds: 500));
 
-            // Navigate to home screen or questionnaire
             if (mounted) {
-              // Wait a short moment to ensure the state is updated
-              await Future.delayed(const Duration(milliseconds: 500));
-
-              // Force rebuild the widget to get the latest state
-              setState(() {});
-
-              // Check again after state update
               if (authProvider.shouldShowQuestionnaire) {
-                debugPrint('Navigating to questionnaire screen');
                 Navigator.pushReplacementNamed(context, '/questionnaire');
               } else {
-                debugPrint('Navigating to home screen');
                 Navigator.pushReplacementNamed(context, '/home');
               }
             }
@@ -142,71 +103,82 @@ class _SignupScreenState extends State<SignupScreen> {
         }
       }
     } on AuthException catch (e) {
-      String message = 'An error occurred';
+      String message = e.message;
       final msg = e.message.toLowerCase();
 
-      if (msg.contains('invalid email') || msg.contains('format')) {
-        message = 'The email address is improperly formatted.';
-      } else if (msg.contains('weak password') || msg.contains('too short')) {
-        message =
-            'The password does not meet the minimum requirements (e.g., too short).';
-      } else if (msg.contains('already registered') ||
+      if (msg.contains('already registered') ||
           msg.contains('already in use')) {
-        message =
-            'The email address is already registered to a different account.';
-      } else if (msg.contains('rate limit') ||
-          msg.contains('too many requests')) {
-        message =
-            'Authentication attempts are blocked due to high frequency, please try again later.';
-      } else if (msg.contains('network') || msg.contains('timeout')) {
-        message =
-            'A network error occurred, such as a timeout or interrupted connection.';
-      } else if (msg.contains('operation not allowed')) {
-        message = 'The provider is not enabled in the Supabase Console.';
-      } else if (msg.contains('account exists with different credential')) {
-        message =
-            'The user is trying to sign in with a provider using an email already associated with another provider.';
-      } else if (msg.contains('user disabled') || msg.contains('disabled by')) {
-        message = 'The user account has been disabled by an administrator.';
-      } else {
-        message = e.message;
+        message = 'This email is already in use. Try logging in instead.';
+      } else if (msg.contains('weak password')) {
+        message = 'Password is too weak. Please use a stronger password.';
+      } else if (msg.contains('rate limit')) {
+        message = 'Too many attempts. Please try again later.';
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(10)),
-            ),
-          ),
-        );
+        _showErrorSnackBar(message);
       }
-    } catch (e, stackTrace) {
-      debugPrint('Caught signup error: $e');
-      debugPrint('Stack trace: $stackTrace');
-
+    } catch (e) {
+      debugPrint('Signup error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create account: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(10)),
-            ),
-          ),
-        );
+        _showErrorSnackBar(
+            'Account creation failed. Check your internet or Supabase configuration.');
       }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.poppins(
+                    color: Colors.white, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.poppins(
+                    color: Colors.white, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.green.shade700,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   @override

@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import 'forgot_password_screen.dart';
 import 'signup_screen.dart';
-import 'package:career_guide/screens/questionnaire_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -41,104 +40,92 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (mounted && user != null) {
-        // Show success message
+        _showSuccessSnackBar('Login successful!');
+
+        // Wait for profile to load
+        await Future.delayed(const Duration(milliseconds: 500));
+
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Login successful!'),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-              margin: EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(10)),
-              ),
-            ),
-          );
-
-          // Navigate to home screen or questionnaire based on user state
-          if (mounted) {
-            // Wait a short moment to ensure the state is fully loaded
-            await Future.delayed(const Duration(milliseconds: 500));
-            setState(() {});
-
-            if (authProvider.shouldShowQuestionnaire) {
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/questionnaire',
-                (route) => false,
-              );
-            } else {
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/home',
-                (route) => false,
-              );
-            }
+          if (authProvider.shouldShowQuestionnaire) {
+            Navigator.pushReplacementNamed(context, '/questionnaire');
+          } else {
+            Navigator.pushReplacementNamed(context, '/home');
           }
         }
       }
     } on AuthException catch (e) {
-      String message = 'An error occurred';
+      String message = e.message;
       final msg = e.message.toLowerCase();
 
       if (msg.contains('invalid login credentials')) {
-        message = 'Invalid email or password';
-      } else if (msg.contains('invalid email') || msg.contains('format')) {
-        message = 'The email address is improperly formatted.';
-      } else if (msg.contains('rate limit') ||
-          msg.contains('too many requests')) {
-        message =
-            'Authentication attempts are blocked due to high frequency, please try again later.';
+        message = 'Invalid email or password. Please try again.';
       } else if (msg.contains('not found')) {
-        message =
-            'There is no user record corresponding to this email address.';
-      } else if (msg.contains('network') || msg.contains('timeout')) {
-        message =
-            'A network error occurred, such as a timeout or interrupted connection.';
-      } else if (msg.contains('operation not allowed')) {
-        message = 'The provider is not enabled in the Supabase Console.';
-      } else if (msg.contains('user disabled') || msg.contains('disabled by')) {
-        message = 'The user account has been disabled by an administrator.';
-      } else if (msg.contains('account exists with different credential')) {
-        message =
-            'The user is trying to sign in with a provider using an email already associated with another provider.';
-      } else {
-        message = e.message;
+        message = 'This account does not exist. Please sign up first.';
+      } else if (msg.contains('rate limit')) {
+        message = 'Too many attempts. Please try again in a few minutes.';
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(10)),
-            ),
-          ),
-        );
+        _showErrorSnackBar(message);
       }
     } catch (e) {
+      debugPrint('Unexpected login error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('An unexpected error occurred. Please try again later.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(10)),
-            ),
-          ),
-        );
+        _showErrorSnackBar(
+            'Connection failed. Please check your internet or Supabase URL.');
       }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.poppins(
+                    color: Colors.white, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Text(
+              message,
+              style: GoogleFonts.poppins(
+                  color: Colors.white, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.green.shade700,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   @override

@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../providers/auth_provider.dart';
 import '../models/user_model.dart';
 import '../models/job_model.dart';
+import '../services/job_service.dart';
 import 'auth/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -33,6 +34,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isEditing = false;
   bool _isLoading = false;
   String? _profileImageUrl;
+  List<Map<String, dynamic>> _enrolledCareers = [];
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -86,6 +88,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _profileImageUrl =
               profile?.photoURL ?? user?.userMetadata?['avatar_url'];
         });
+
+        // Load enrolled careers
+        final enrolled = await JobService.getEnrolledCareers();
+        if (mounted) {
+          setState(() {
+            _enrolledCareers = enrolled;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error loading user profile: $e');
@@ -128,7 +138,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final user = authProvider.user;
 
       if (user != null) {
-        // Update user profile in Firestore
+        // Update user profile in Database
         final updatedProfile = UserProfile(
           uid: user.id,
           email: _emailController.text.trim(),
@@ -147,10 +157,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           updatedAt: DateTime.now(),
         );
 
-        // Update in Firestore
+        // Update in Database
         await authProvider.updateUserProfile(updatedProfile);
 
-        // Update in Firebase Auth if name changed
+        // Update in Auth if name changed
         if (user.userMetadata?['display_name'] != _nameController.text.trim()) {
           // Supabase handles name via user update
           await Supabase.instance.client.auth.updateUser(
@@ -205,6 +215,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
         MaterialPageRoute(builder: (context) => const LoginScreen()),
         (route) => false,
       );
+    }
+  }
+
+  Future<void> _retakeTest() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Retake Assessment',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        content: Text(
+            'This will clear your current assessment results and you will need to take the test again. Continue?',
+            style: GoogleFonts.poppins()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: GoogleFonts.poppins()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Retake',
+                style: GoogleFonts.poppins(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+      final user = authProvider.user;
+
+      if (user != null) {
+        // 1. Update user profile flag (don't delete results yet as updating is better)
+        if (authProvider.userProfile != null) {
+          final updatedProfile = authProvider.userProfile!.copyWith(
+            hasCompletedQuestionnaire: false,
+          );
+          await authProvider.updateUserProfile(updatedProfile);
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Assessment results cleared.'),
+                backgroundColor: Colors.blue),
+          );
+
+          // 3. Navigate to questionnaire
+          Navigator.pushNamedAndRemoveUntil(
+              context, '/questionnaire', (route) => false);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error clearing assessment: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to clear assessment: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -345,6 +427,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
+                          child: ElevatedButton.icon(
+                            icon:
+                                const Icon(Icons.refresh, color: Colors.white),
+                            label: Text(
+                              'Retake Assessment',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            onPressed: _isLoading ? null : _retakeTest,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange.shade700,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.logout),
                             label: Text(
@@ -369,6 +475,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
+                _buildLearningDashboard(),
                 if (widget.job != null) _buildJobDetails(),
               ],
             ),
@@ -511,6 +618,87 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Expanded(
               child: Text(value,
                   style: GoogleFonts.poppins(color: Colors.grey.shade700))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLearningDashboard() {
+    if (_enrolledCareers.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('Overall Learning Progress'),
+          const SizedBox(height: 16),
+          ..._enrolledCareers.map((item) {
+            final Job career = item['career'];
+            final int completed = item['completedSteps'];
+            final int total = item['totalSteps'];
+            final double percentage = item['progressPercentage'];
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          career.roleTitle,
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${percentage.toInt()}%',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: LinearProgressIndicator(
+                      value: percentage / 100,
+                      backgroundColor: Colors.grey.shade200,
+                      color: Colors.blue.shade600,
+                      minHeight: 8,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '$completed of $total steps completed',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
         ],
       ),
     );

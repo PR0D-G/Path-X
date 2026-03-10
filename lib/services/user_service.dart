@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 
@@ -6,7 +7,7 @@ class UserService {
 
   // Collection references
   final String _usersCollection = 'users';
-  final String _userProgressCollection = 'user_progress';
+  final String _userProgressCollection = 'user_learning_progress';
 
   // Get user profile
   Stream<UserProfile> getUserProfile(String userId) {
@@ -17,7 +18,6 @@ class UserService {
         .map((docs) {
           if (docs.isEmpty) throw Exception('User profile not found');
           final data = Map<String, dynamic>.from(docs.first);
-          data['uid'] = data['id'];
           return UserProfile.fromMap(data);
         });
   }
@@ -25,120 +25,46 @@ class UserService {
   // Create or update user profile
   Future<void> updateUserProfile(UserProfile userProfile) async {
     final data = userProfile.toMap();
-    data['id'] = data['uid'];
-    data.remove('uid');
-
     await _supabase.from(_usersCollection).upsert(data);
   }
 
-  // Get user progress for a specific job role
-  Stream<UserProgress> getUserProgress(String userId, String jobRoleId) {
+  // Get user progress for a specific learning path
+  Stream<UserProgress> getUserProgress(String userId, int learningPathId) {
     return _supabase
         .from(_userProgressCollection)
         .stream(primaryKey: ['id']).map((docs) {
       final filteredDocs = docs
           .where((doc) =>
-              doc['user_id'] == userId && doc['job_role_id'] == jobRoleId)
+              doc['user_id'] == userId &&
+              doc['learning_path_id'] == learningPathId)
           .toList();
 
       if (filteredDocs.isEmpty) {
-        // Return a new progress object if none exists
         return UserProgress(
-          id: '',
           userId: userId,
-          jobRoleId: jobRoleId,
-          completedLessons: {},
-          progressPercentage: 0.0,
+          learningPathId: learningPathId,
+          status: 'not_started',
+          progress: 0,
         );
       }
 
       final doc = filteredDocs.first;
-      return UserProgress(
-        id: doc['id'].toString(),
-        userId: doc['user_id'] as String,
-        jobRoleId: doc['job_role_id'] as String,
-        completedLessons:
-            doc['completed_lessons'] as Map<String, dynamic>? ?? {},
-        progressPercentage:
-            (doc['progress_percentage'] as num?)?.toDouble() ?? 0.0,
-      );
+      return UserProgress.fromMap(doc);
     });
   }
 
   // Update user progress
   Future<void> updateUserProgress(UserProgress progress) async {
-    final progressData = {
-      'user_id': progress.userId,
-      'job_role_id': progress.jobRoleId,
-      'completed_lessons': progress.completedLessons,
-      'progress_percentage': progress.progressPercentage,
-    };
+    final data = progress.toMap();
 
-    if (progress.id.isEmpty) {
-      // Create new progress document
-      await _supabase.from(_userProgressCollection).insert(progressData);
+    if (progress.id == null) {
+      await _supabase.from(_userProgressCollection).insert(data);
     } else {
-      // Update existing progress document
       await _supabase
           .from(_userProgressCollection)
-          .update(progressData)
-          .eq('id', progress.id);
+          .update(data)
+          .eq('id', progress.id!);
     }
-  }
-
-  // Mark a lesson as completed
-  Future<void> completeLesson({
-    required String jobRoleId,
-    required String lessonId,
-    required bool isCompleted,
-  }) async {
-    final user = _supabase.auth.currentUser;
-    final userId = user?.id;
-    if (userId == null) return;
-
-    // Get the current progress
-    final docs = await _supabase
-        .from(_userProgressCollection)
-        .select()
-        .eq('user_id', userId)
-        .eq('job_role_id', jobRoleId)
-        .limit(1);
-
-    UserProgress progress;
-    if (docs.isEmpty) {
-      // Create new progress if it doesn't exist
-      progress = UserProgress(
-        id: '',
-        userId: userId,
-        jobRoleId: jobRoleId,
-        completedLessons: {lessonId: isCompleted},
-        progressPercentage: isCompleted ? 1.0 : 0.0, // This will be updated
-      );
-    } else {
-      // Update existing progress
-      final data = docs.first;
-      final completedLessons =
-          Map<String, dynamic>.from(data['completed_lessons'] ?? {});
-      completedLessons[lessonId] = isCompleted;
-
-      // Calculate progress percentage (simplified example)
-      final totalLessons =
-          10; // You'll need to get the actual total number of lessons
-      final completedCount =
-          completedLessons.values.where((v) => v == true).length;
-      final progressPercentage =
-          totalLessons > 0 ? completedCount / totalLessons : 0.0;
-
-      progress = UserProgress(
-        id: data['id'].toString(),
-        userId: userId,
-        jobRoleId: jobRoleId,
-        completedLessons: completedLessons,
-        progressPercentage: progressPercentage,
-      );
-    }
-
-    await updateUserProgress(progress);
   }
 
   // Get all user progress for the current user
@@ -151,17 +77,49 @@ class UserService {
         .from(_userProgressCollection)
         .stream(primaryKey: ['id']).map((docs) {
       return docs
-          .where((doc) => doc['user_id'] == userId) // Client-side filtering
-          .map((doc) => UserProgress(
-                id: doc['id'].toString(),
-                userId: doc['user_id'] as String,
-                jobRoleId: doc['job_role_id'] as String,
-                completedLessons:
-                    doc['completed_lessons'] as Map<String, dynamic>? ?? {},
-                progressPercentage:
-                    (doc['progress_percentage'] as num?)?.toDouble() ?? 0.0,
-              ))
+          .where((doc) => doc['user_id'] == userId)
+          .map((doc) => UserProgress.fromMap(doc))
           .toList();
     });
+  }
+
+  // Get progress summary for a career
+  Future<Map<String, dynamic>> getCareerProgressSummary(int careerId) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return {'completed': 0, 'total': 0, 'percentage': 0.0};
+
+    try {
+      // Get all learning paths for this career
+      final paths = await _supabase
+          .from('learning_paths')
+          .select('id')
+          .eq('career_id', careerId);
+      final pathIds = (paths as List).map((p) => p['id'] as int).toList();
+
+      if (pathIds.isEmpty)
+        return {'completed': 0, 'total': 0, 'percentage': 0.0};
+
+      // Get user progress for these paths
+      final progressResponse = await _supabase
+          .from(_userProgressCollection)
+          .select()
+          .eq('user_id', user.id)
+          .filter('learning_path_id', 'in', '(${pathIds.join(",")})');
+
+      final progresses = (progressResponse as List)
+          .map((p) => UserProgress.fromMap(p))
+          .toList();
+      final completedCount =
+          progresses.where((p) => p.status == 'completed').length;
+
+      return {
+        'completed': completedCount,
+        'total': pathIds.length,
+        'percentage': (completedCount / pathIds.length) * 100,
+      };
+    } catch (e) {
+      debugPrint('Error getting career progress summary: $e');
+      return {'completed': 0, 'total': 0, 'percentage': 0.0};
+    }
   }
 }

@@ -15,12 +15,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
-  bool _isLoading = false;
 
   final List<Widget> _screens = [
-    const JobRecommendationsScreen(
-      assessmentResults: {},
-    ),
+    const JobRecommendationsScreen(),
     const LearningPathScreen(),
     const ProfileScreen(),
   ];
@@ -70,8 +67,10 @@ class _HomeScreenState extends State<HomeScreen> {
               currentAccountPicture: CircleAvatar(
                 backgroundColor: Colors.white,
                 child: Text(
-                  (authProvider.userProfile?.displayName ?? 'P')[0]
-                      .toUpperCase(),
+                  (authProvider.userProfile?.displayName != null &&
+                          authProvider.userProfile!.displayName!.isNotEmpty)
+                      ? authProvider.userProfile!.displayName![0].toUpperCase()
+                      : 'P',
                   style: GoogleFonts.poppins(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -79,50 +78,94 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            ListTile(
-              leading: Icon(Icons.person_outline, color: Colors.grey.shade700),
-              title: Text('Profile',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
-              onTap: () {
-                Navigator.pop(context); // Close the drawer
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const ProfileScreen()),
-                );
-              },
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  ListTile(
+                    leading:
+                        Icon(Icons.person_outline, color: Colors.grey.shade700),
+                    title: Text('My Profile',
+                        style:
+                            GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                    onTap: () {
+                      Navigator.pop(context); // Close the drawer
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const ProfileScreen()),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(Icons.document_scanner_outlined,
+                        color: Colors.grey.shade700),
+                    title: Text('Scan My Resume',
+                        style:
+                            GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      // Navigate to scan resume
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(Icons.description_outlined,
+                        color: Colors.grey.shade700),
+                    title: Text('Build Your Resume',
+                        style:
+                            GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      // Navigate to build resume
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(Icons.verified_outlined,
+                        color: Colors.grey.shade700),
+                    title: Text('Validate/Verify Certificates',
+                        style:
+                            GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      // Navigate to verify certificates
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(Icons.settings_outlined,
+                        color: Colors.grey.shade700),
+                    title: Text('Settings',
+                        style:
+                            GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      // Navigate to settings (placeholder)
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(Icons.support_agent_outlined,
+                        color: Colors.grey.shade700),
+                    title: Text('Support',
+                        style:
+                            GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      // Navigate to support (placeholder)
+                    },
+                  ),
+                  ListTile(
+                    leading:
+                        Icon(Icons.help_outline, color: Colors.grey.shade700),
+                    title: Text('Raise a Request',
+                        style:
+                            GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      // Navigate to raise request (placeholder)
+                    },
+                  ),
+                ],
+              ),
             ),
-            ListTile(
-              leading:
-                  Icon(Icons.settings_outlined, color: Colors.grey.shade700),
-              title: Text('Settings',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
-              onTap: () {
-                Navigator.pop(context);
-                // Navigate to settings (placeholder)
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.support_agent_outlined,
-                  color: Colors.grey.shade700),
-              title: Text('Support',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
-              onTap: () {
-                Navigator.pop(context);
-                // Navigate to support (placeholder)
-              },
-            ),
-            ListTile(
-              leading:
-                  Icon(Icons.add_box_outlined, color: Colors.grey.shade700),
-              title: Text('Add Features / Course',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
-              onTap: () {
-                Navigator.pop(context);
-                // Navigate to add features (placeholder)
-              },
-            ),
-            const Spacer(),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.redAccent),
@@ -130,11 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: GoogleFonts.poppins(
                       fontWeight: FontWeight.w500, color: Colors.redAccent)),
               onTap: () async {
-                setState(() => _isLoading = true);
                 await authProvider.signOut();
-                if (mounted) {
-                  setState(() => _isLoading = false);
-                }
               },
             ),
             const SizedBox(height: 16),

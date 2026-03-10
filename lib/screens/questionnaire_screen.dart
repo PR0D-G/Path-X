@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
@@ -54,12 +55,82 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.name ?? '');
-    _educationController =
-        TextEditingController(text: widget.educationLevel ?? '');
-    _skillsController =
-        TextEditingController(text: widget.skills?.join(', ') ?? '');
-    _interestsController = TextEditingController(text: widget.interests ?? '');
+    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+    final profile = authProvider.userProfile;
+
+    // Use widget values if present, otherwise fallback to existing profile data
+    _nameController =
+        TextEditingController(text: widget.name ?? profile?.displayName ?? '');
+    _educationController = TextEditingController(
+        text: widget.educationLevel ?? profile?.educationLevel ?? '');
+    _skillsController = TextEditingController(
+        text: widget.skills?.join(', ') ?? profile?.skills?.join(', ') ?? '');
+    _interestsController = TextEditingController(
+        text: widget.interests ?? profile?.interests ?? '');
+
+    // Auto-skip logic: If name is already provided, skip the info form and load questions
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_nameController.text.isNotEmpty) {
+        debugPrint(
+            'DEBUG: Auto-skipping info form as name exists: ${_nameController.text}');
+        _loadQuestions();
+      }
+    });
+  }
+
+  Future<void> _loadQuestions() async {
+    setState(() {
+      _isLoadingQuestions = true;
+    });
+    try {
+      final fetchedQuestions = await QuestionService.fetchQuizQuestions();
+      if (mounted) {
+        setState(() {
+          _questions = fetchedQuestions;
+          _showInfoForm = false;
+          _isLoadingQuestions = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingQuestions = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load questions: $e')),
+        );
+      }
+    }
+  }
+
+  void _fillDummyDataAndSubmit() async {
+    setState(() {
+      _isLoadingQuestions = true;
+    });
+
+    for (int i = 0; i < _questions.length; i++) {
+      final q = _questions[i];
+      final category = q['category'] as String?;
+      final isMath = q['isMath'] == true;
+      final options = q['options'] as List<dynamic>?;
+
+      if ([
+        'Realistic',
+        'Investigative',
+        'Artistic',
+        'Social',
+        'Enterprising',
+        'Conventional'
+      ].contains(category)) {
+        _answers[i] = 4.0; // High rating
+      } else if (isMath || options != null) {
+        _answers[i] = q['correct_answer'] ?? (options?.first ?? 'Option A');
+      } else {
+        _answers[i] = 'Dummy Answer';
+      }
+    }
+
+    await _submitQuestionnaire();
   }
 
   @override
@@ -95,6 +166,9 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         int mathScore = 0;
 
         _answers.forEach((index, rawAnswer) {
+          if (index >= _questions.length)
+            return; // Fix: Skip any indices that are out of bounds
+
           final question = _questions[index];
           final category = question['category'] as String?;
           final isMath = question['isMath'] == true;
@@ -130,12 +204,61 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
 
         // Pack the final assessment map
         final Map<String, dynamic> finalScores = {
-          "RIASEC": riasecScores,
           "logic": logicScore,
           "reasoning": reasoningScore,
           "pattern": patternScore,
           "math": mathScore,
+          'riasec_realistic': riasecScores['Realistic'] ?? 0,
+          'riasec_investigative': riasecScores['Investigative'] ?? 0,
+          'riasec_artistic': riasecScores['Artistic'] ?? 0,
+          'riasec_social': riasecScores['Social'] ?? 0,
+          'riasec_enterprising': riasecScores['Enterprising'] ?? 0,
+          'riasec_conventional': riasecScores['Conventional'] ?? 0,
         };
+
+        // 1️⃣ Store Assessment Results to Supabase (Update if exists, else insert)
+        try {
+          debugPrint('Saving assessment results for user: ${user.id}');
+
+          final existingResponse = await Supabase.instance.client
+              .from('assessment_results')
+              .select('user_id')
+              .eq('user_id', user.id)
+              .maybeSingle();
+
+          final assessmentData = {
+            'user_id': user.id,
+            'math': mathScore,
+            'logic': logicScore,
+            'pattern': patternScore,
+            'reasoning': reasoningScore,
+            'riasec_realistic': riasecScores['Realistic'] ?? 0,
+            'riasec_investigative': riasecScores['Investigative'] ?? 0,
+            'riasec_artistic': riasecScores['Artistic'] ?? 0,
+            'riasec_social': riasecScores['Social'] ?? 0,
+            'riasec_enterprising': riasecScores['Enterprising'] ?? 0,
+            'riasec_conventional': riasecScores['Conventional'] ?? 0,
+          };
+
+          if (existingResponse != null) {
+            // Update existing record
+            await Supabase.instance.client
+                .from('assessment_results')
+                .update(assessmentData)
+                .eq('user_id', user.id);
+            debugPrint('Assessment results updated successfully.');
+          } else {
+            // Insert new record
+            await Supabase.instance.client
+                .from('assessment_results')
+                .insert(assessmentData);
+            debugPrint('Assessment results inserted successfully.');
+          }
+        } catch (e) {
+          debugPrint('CRITICAL: Error inserting assessment_results: $e');
+          // Rethrow to show in UI
+          rethrow;
+        }
 
         // Get user skills from the form
         final skills = _skillsController.text
@@ -291,8 +414,8 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     } else {
       // All questions answered, submit the questionnaire
       setState(() {
-        // Show loading incase submission takes time
-        _currentQuestionIndex++; // Prevent double submits visually
+        _isLoadingQuestions =
+            true; // Use this to show a full-screen loader while submitting
       });
       await _submitQuestionnaire();
     }
@@ -318,7 +441,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
               child: Text(
                 _questions.isEmpty
                     ? '0/0'
-                    : '${_currentQuestionIndex + 1}/${_questions.length}',
+                    : '${(_currentQuestionIndex + 1).clamp(1, _questions.length)}/${_questions.length}',
                 style: GoogleFonts.poppins(
                   fontWeight: FontWeight.w500,
                   color: Colors.blue.shade800,
@@ -329,41 +452,53 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
         ),
         body: _showInfoForm
             ? _buildInfoForm()
-            : Column(
-                children: [
-                  // Progress Bar
-                  LinearProgressIndicator(
-                    value: _questions.isEmpty
-                        ? 0
-                        : (_currentQuestionIndex + 1) / _questions.length,
-                    backgroundColor: Colors.grey.shade200,
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
-                    minHeight: 4,
-                  ),
+            : _isLoadingQuestions
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Submitting your results...'),
+                      ],
+                    ),
+                  )
+                : Column(
+                    children: [
+                      // Progress Bar
+                      LinearProgressIndicator(
+                        value: _questions.isEmpty
+                            ? 0
+                            : ((_currentQuestionIndex + 1) / _questions.length)
+                                .clamp(0.0, 1.0),
+                        backgroundColor: Colors.grey.shade200,
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
+                        minHeight: 4,
+                      ),
 
-                  // Questions
-                  Expanded(
-                    child: _questions.isEmpty
-                        ? const Center(
-                            child: CircularProgressIndicator(),
-                          )
-                        : PageView.builder(
-                            controller: _pageController,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _questions.length,
-                            onPageChanged: (index) {
-                              setState(() {
-                                _currentQuestionIndex = index;
-                              });
-                            },
-                            itemBuilder: (context, index) {
-                              return _buildQuestionCard(index);
-                            },
-                          ),
+                      // Questions
+                      Expanded(
+                        child: _questions.isEmpty
+                            ? const Center(
+                                child: CircularProgressIndicator(),
+                              )
+                            : PageView.builder(
+                                controller: _pageController,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _questions.length,
+                                onPageChanged: (index) {
+                                  setState(() {
+                                    _currentQuestionIndex = index;
+                                  });
+                                },
+                                itemBuilder: (context, index) {
+                                  return _buildQuestionCard(index);
+                                },
+                              ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
       );
     });
   }
@@ -374,13 +509,32 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Tell us about yourself',
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: Colors.blue.shade800,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Tell us about yourself',
+                style: GoogleFonts.poppins(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue.shade800,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _nameController.text = "Dummy User";
+                    _educationController.text = "Undergraduate (Bachelor's)";
+                    _skillsController.text = "Java, Flutter, SQL";
+                    _interestsController.text = "Software Development, AI";
+                  });
+                },
+                icon: const Icon(Icons.flash_on, size: 18),
+                label: const Text('Dummy Data'),
+                style: TextButton.styleFrom(
+                    foregroundColor: Colors.orange.shade800),
+              ),
+            ],
           ),
           const SizedBox(height: 32),
 
@@ -468,34 +622,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _isLoadingQuestions
-                  ? null
-                  : () async {
-                      setState(() {
-                        _isLoadingQuestions = true;
-                      });
-                      try {
-                        final fetchedQuestions =
-                            await QuestionService.fetchQuizQuestions();
-                        if (mounted) {
-                          setState(() {
-                            _questions = fetchedQuestions;
-                            _showInfoForm = false;
-                            _isLoadingQuestions = false;
-                          });
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          setState(() {
-                            _isLoadingQuestions = false;
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                                content: Text('Failed to load questions: $e')),
-                          );
-                        }
-                      }
-                    },
+              onPressed: _isLoadingQuestions ? null : _loadQuestions,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
@@ -731,7 +858,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           const SizedBox(height: 40),
 
           // Navigation Buttons
-          if (questionIndex > 0)
+          if (questionIndex > 0 && !isMath)
             SizedBox(
               width: double.infinity,
               child: TextButton(
@@ -747,6 +874,22 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
                     fontSize: 16,
                     color: Colors.blue.shade700,
                     fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+
+          if (questionIndex == 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 20),
+              child: Center(
+                child: TextButton.icon(
+                  onPressed: _fillDummyDataAndSubmit,
+                  icon: const Icon(Icons.bolt, color: Colors.orange),
+                  label: Text(
+                    'DEBUG: Fill Dummy & Submit',
+                    style: GoogleFonts.poppins(
+                        color: Colors.orange, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),

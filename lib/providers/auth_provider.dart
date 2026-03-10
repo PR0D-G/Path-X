@@ -48,35 +48,58 @@ class AppAuthProvider with ChangeNotifier {
   // Load user profile from Supabase Database
   Future<void> loadUserProfile(String uid) async {
     try {
+      debugPrint('Attempting to load profile for UID: $uid');
       final data =
           await _supabase.from('users').select().eq('id', uid).maybeSingle();
 
       if (data != null) {
+        debugPrint('Profile data found: $data');
         _userProfile = UserProfile.fromMap(data);
+
+        // Fetch assessment results from separate table
+        try {
+          final assessmentData = await _supabase
+              .from('assessment_results')
+              .select()
+              .eq('user_id', uid)
+              .maybeSingle();
+
+          if (assessmentData != null) {
+            _userProfile = _userProfile!.copyWith(
+              assessmentResults: assessmentData,
+            );
+          }
+        } catch (ae) {
+          debugPrint('Notice: Could not load assessment results: $ae');
+          // Non-critical, continue with profile only
+        }
       } else {
+        debugPrint('No profile found for UID: $uid. Creating default.');
         // Create a new profile if missing
         _userProfile = UserProfile(
           uid: uid,
           email: _user?.email,
           displayName: _user?.userMetadata?['display_name'] ??
               _user?.userMetadata?['full_name'] ??
-              _user?.email?.split('@').first,
+              _user?.email?.split('@').first ??
+              'User',
           photoURL: _user?.userMetadata?['avatar_url'],
           skills: [],
         );
         await _saveUserProfile();
       }
     } catch (e) {
-      debugPrint('Error loading user profile: $e');
+      debugPrint('CRITICAL: Error loading user profile: $e');
+      // If we hit a network error, we still need a fallback profile for the UI to render
+      // but we should probably mark it as "loading failed"
       _userProfile = UserProfile(
         uid: uid,
         email: _user?.email,
-        displayName: _user?.userMetadata?['display_name'] ??
-            _user?.userMetadata?['full_name'] ??
-            _user?.email?.split('@').first,
-        photoURL: _user?.userMetadata?['avatar_url'],
+        displayName: _user?.userMetadata?['display_name'] ?? 'User',
         skills: [],
       );
+    } finally {
+      notifyListeners();
     }
   }
 
@@ -85,11 +108,7 @@ class AppAuthProvider with ChangeNotifier {
     if (_userProfile == null) return;
     try {
       final map = _userProfile!.toMap();
-      // Ensure we use 'id' instead of 'uid' for supabase primary key mapping if needed.
-      // UserProfile map uses 'uid', but the table has 'id'
-      map['id'] = map['uid'];
-      map.remove('uid');
-
+      // UserProfile.toMap() now matches the Supabase schema (uses 'id', snake_case)
       await _supabase.from('users').upsert(map);
     } catch (e) {
       debugPrint('Error saving user profile: $e');
