@@ -84,7 +84,7 @@ class AppAuthProvider with ChangeNotifier {
               _user?.email?.split('@').first ??
               'User',
           photoURL: _user?.userMetadata?['avatar_url'],
-          skills: [],
+          skills: ['Research'],
         );
         await _saveUserProfile();
       }
@@ -96,7 +96,7 @@ class AppAuthProvider with ChangeNotifier {
         uid: uid,
         email: _user?.email,
         displayName: _user?.userMetadata?['display_name'] ?? 'User',
-        skills: [],
+        skills: ['Research'],
       );
     } finally {
       notifyListeners();
@@ -186,7 +186,7 @@ class AppAuthProvider with ChangeNotifier {
               _user?.userMetadata?['display_name'] ??
               _user!.email?.split('@').first,
           photoURL: _user?.userMetadata?['avatar_url'],
-          skills: [],
+          skills: ['Research'],
           hasCompletedQuestionnaire: false,
         );
 

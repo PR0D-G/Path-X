@@ -296,7 +296,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: ElevatedButton(
                             onPressed: _isLoading ? null : _login,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue.shade600,
+                              backgroundColor: const Color(0xFF004B8D), // Mumbai Indians Blue
                               elevation: 8,
                               shadowColor:
                                   Colors.blue.shade900.withOpacity(0.5),

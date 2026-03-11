@@ -47,7 +47,7 @@ class MyApp extends StatelessWidget {
           textTheme: GoogleFonts.poppinsTextTheme(),
           appBarTheme: AppBarTheme(
             backgroundColor: Colors.white,
-            foregroundColor: Colors.blue.shade900,
+            foregroundColor: const Color(0xFF004B8D), // Mumbai Indians Blue
             elevation: 0,
           ),
         ),

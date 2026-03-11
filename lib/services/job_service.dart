@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:math' as math;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/job_model.dart';
 
@@ -231,7 +232,7 @@ class JobService {
     }
   }
 
-  static Future<List<Job>> getMatchedCareers() async {
+  static Future<List<Job>> getMatchedCareers([List<String> userSkills = const []]) async {
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
@@ -265,6 +266,10 @@ class JobService {
           'riasec_enterprising': 1.8,
           'riasec_conventional': 3.6,
         };
+        // Add dummy skills if empty to test matching
+        if (userSkills.isEmpty) {
+          userSkills.add('Research');
+        }
       } else {
         scores = assessmentResponseList.first;
       }
@@ -284,40 +289,51 @@ class JobService {
         remote_possible,
         fresher_friendly,
         education_level,
+        category,
         career_skills (
           skill_name,
           importance
         ),
         career_weights (
           *
+        ),
+        career_industries (
+          industry
         )
       ''');
 
-      debugPrint('MATCH DEBUG: Found ${careersList.length} careers.');
+      debugPrint('MATCH DEBUG: Found ${careersList.length} careers in database.');
       if (careersList.isNotEmpty) {
-        final sample = careersList.first;
-        debugPrint('MATCH DEBUG: Sample keys: ${sample.keys.toList()}');
-        debugPrint(
-            'MATCH DEBUG: Sample career_weights: ${sample['career_weights']}');
+        debugPrint('MATCH DEBUG: Sample Raw Career Data: ${careersList.first}');
+        debugPrint('RAW SKILLS: ${careersList.first['career_skills']}');
       }
 
       // 3. Pre-fetch ALL weights as a robust fallback to avoid join issues
-      debugPrint('MATCH DEBUG: Fetching ALL weights for fallback...');
-      final List<dynamic> allWeightsList =
-          await supabase.from('career_weights').select('*');
-      debugPrint(
-          'MATCH DEBUG: Total rows in career_weights: ${allWeightsList.length}');
-
+      debugPrint('MATCH DEBUG: Fetching ALL weights and ALL skills for robust mapping...');
+      final weightResponse = await supabase.from('career_weights').select('*');
+      final skillResponse = await supabase.from('career_skills').select('*');
+      
       final Map<int, Map<String, dynamic>> weightsByCareerId = {};
-      for (var w in allWeightsList) {
+      for (var w in weightResponse) {
         final cId = w['career_id'];
+        if (cId != null) weightsByCareerId[int.parse(cId.toString())] = w;
+      }
+
+      final Map<int, List<String>> skillsByCareerId = {};
+      final Map<int, Map<String, int>> skillImportancesByCareerId = {};
+      
+      for (var s in skillResponse) {
+        final cId = s['career_id'];
         if (cId != null) {
-          weightsByCareerId[int.parse(cId.toString())] =
-              w as Map<String, dynamic>;
+          final id = int.parse(cId.toString());
+          final name = s['skill_name']?.toString() ?? s['skill']?.toString() ?? '';
+          if (name.isNotEmpty) {
+            skillsByCareerId.putIfAbsent(id, () => []).add(name);
+            final imp = int.tryParse(s['importance']?.toString() ?? '3') ?? 3;
+            skillImportancesByCareerId.putIfAbsent(id, () => {})[name] = imp;
+          }
         }
       }
-      debugPrint(
-          'MATCH DEBUG: Weights Map Keys (first 5): ${weightsByCareerId.keys.take(5).toList()}');
 
 
       List<Map<String, dynamic>> tempResults = [];
@@ -397,12 +413,92 @@ class JobService {
           weightTotal += importance;
         });
 
-        double rawScore = (weightedSimilaritySum / weightTotal) * 100;
+        double rawScore = weightTotal > 0 ? (weightedSimilaritySum / weightTotal) * 100 : 0.0;
+
+        // Identify Top 2 matching traits for the blurb
+        List<MapEntry<String, double>> traitScores = userTraitValues.entries.toList();
+        traitScores.sort((a, b) => b.value.compareTo(a.value));
+        String bestTrait1 = traitScores[0].key;
+        String bestTrait2 = traitScores[1].key;
+        String summary = "Your $bestTrait1 and $bestTrait2 skills make you a great fit for this role.";
+
+        // Prepare RIASEC scores for Radar Chart (multiplied by 100 for percentage scale)
+        List<double> userRiasec = [normR * 100, normI * 100, normA * 100, normS * 100, normE * 100, normC * 100];
+        List<double> jobRiasec = [
+          (getWeight('realistic') / maxCVal) * 100,
+          (getWeight('investigative') / maxCVal) * 100,
+          (getWeight('artistic') / maxCVal) * 100,
+          (getWeight('social') / maxCVal) * 100,
+          (getWeight('enterprising') / maxCVal) * 100,
+          (getWeight('conventional') / maxCVal) * 100,
+        ];
+
+        // Parse skills and calculate skill match
+        List<String> coreSkills = [];
+        Map<String, int> skillImportances = {};
+        
+        // 1. Try Joined data (Safely)
+        final List<dynamic>? joinedSkills = 
+            row['career_skills'] != null ? List.from(row['career_skills']) : null;
+
+        if (joinedSkills != null && joinedSkills.isNotEmpty) {
+          for (var sk in joinedSkills) {
+            final Map<String, dynamic> skillRow = sk as Map<String, dynamic>;
+            final name = skillRow['skill_name']?.toString() ?? '';
+            if (name.isNotEmpty) {
+              coreSkills.add(name);
+              final imp = int.tryParse(skillRow['importance']?.toString() ?? '3') ?? 3;
+              skillImportances[name] = imp;
+            }
+          }
+        }
+
+        // 2. Fallback to Pre-fetched data
+        if (coreSkills.isEmpty && careerId != null && skillsByCareerId.containsKey(careerId)) {
+          coreSkills = List<String>.from(skillsByCareerId[careerId]!);
+          skillImportances = Map<String, int>.from(skillImportancesByCareerId[careerId]!);
+          debugPrint('MATCH DEBUG: Skills for ${row['title']} loaded from fallback mapping.');
+        }
+
+        double skillMatchScore = 0;
+        double totalPossibleSkillScore = 0;
+        
+        for (var entry in skillImportances.entries) {
+          totalPossibleSkillScore += entry.value;
+          if (userSkills.any((us) => us.toLowerCase() == entry.key.toLowerCase())) {
+            skillMatchScore += entry.value;
+          }
+        }
+
+        // FALLBACK: If join returned nothing, we try to use cached skills if we have them or move on
+        if (coreSkills.isEmpty) {
+           debugPrint('MATCH DEBUG: No skills found in join for ${row['title']}. Checking fallback...');
+        }
+
+        double skillBonusFactor = totalPossibleSkillScore > 0 
+            ? (skillMatchScore / totalPossibleSkillScore) 
+            : 0.5; // Neutral if no skills defined
+
+        // Mix RIASEC/Aptitude (85%) with Skill Match (15%)
+        double combinedRaw = (rawScore * 0.85) + (skillBonusFactor * 100 * 0.15);
+
+        // Fetch primary industry
+        String industry = 'General';
+        final industries = row['career_industries'] as List?;
+        if (industries != null && industries.isNotEmpty) {
+          industry = industries.first['industry'].toString();
+        }
 
         // Save raw calculations to a temporary list
         tempResults.add({
           'row': row,
-          'rawScore': rawScore,
+          'rawScore': combinedRaw,
+          'summary': summary,
+          'userRiasec': userRiasec,
+          'jobRiasec': jobRiasec,
+          'skills': coreSkills,
+          'skillImportances': skillImportances,
+          'industry': industry,
         });
       }
 
@@ -412,8 +508,14 @@ class JobService {
       
       if (tempResults.isNotEmpty) {
         // Find the absolute highest and lowest raw scores in the database
-        double minRaw = tempResults.map((e) => e['rawScore'] as double).reduce((a, b) => a < b ? a : b);
-        double maxRaw = tempResults.map((e) => e['rawScore'] as double).reduce((a, b) => a > b ? a : b);
+        double minRaw = tempResults.first['rawScore'];
+        double maxRaw = tempResults.first['rawScore'];
+
+        for (var res in tempResults) {
+          double s = res['rawScore'];
+          minRaw = math.min(minRaw, s);
+          maxRaw = math.max(maxRaw, s);
+        }
 
         double targetMin = 12.0; // The lowest percentage a user will ever see
         double targetMax = 98.0; // The highest percentage a user will ever see
@@ -438,30 +540,51 @@ class JobService {
 
           finalCurvedScore = (finalCurvedScore + demandBonus).clamp(0.0, 100.0);
 
-          // Parse skills
-          List<String> skills = [];
-          final joinedSkills = row['career_skills'] as List?;
-          if (joinedSkills != null && joinedSkills.isNotEmpty) {
-            skills = joinedSkills.map((s) => s['skill_name'].toString()).toList();
+        // Robust salary parsing
+        int parseSalary(dynamic val, [dynamic fallback]) {
+          final raw = val ?? fallback;
+          if (raw == null) return 0;
+          int parsed = 0;
+          if (raw is num) {
+            parsed = raw.toInt();
+          } else {
+            parsed = int.tryParse(raw.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
           }
+          // If value is small (e.g., 5, 10, 15), assume it's already in Lakhs and convert to Rupees
+          if (parsed > 0 && parsed < 1000) return parsed * 100000;
+          return parsed;
+        }
 
-          matchedJobs.add(Job(
+        final int sMin = parseSalary(row['salary_min']);
+        final int sMax = parseSalary(row['salary_max']);
+
+        debugPrint('MATCH DEBUG: Processing Career: ${row['title']} | ID: ${row['id']}');
+        debugPrint('MATCH DEBUG: - Raw Salary Min: ${row['salary_min']} | Max: ${row['salary_max']}');
+        debugPrint('MATCH DEBUG: - Parsed Salary: $sMin - $sMax');
+        
+        matchedJobs.add(Job(
             id: row['id'],
             roleTitle: row['title'] ?? 'Unknown Role',
+            category: (row['category'] ?? 'General').toString(),
+            industry: item['industry'] ?? 'General',
             description: row['description'] ?? '',
             demandLevel: row['demand_level']?.toString() ?? 'Low',
-            salaryMin: (row['salary_min'] as num?)?.toInt() ?? 0,
-            salaryMax: (row['salary_max'] as num?)?.toInt() ?? 0,
+            salaryMin: sMin,
+            salaryMax: sMax,
             remotePossible: row['remote_possible'] == true,
             fresherFriendly: row['fresher_friendly'] == true,
             education: row['education_level']?.toString() ?? '',
-            coreSkills: skills,
-            matchPercentage: finalCurvedScore, // Use the beautifully curved score!
+            coreSkills: item['skills'] ?? [],
+            skillImportances: item['skillImportances'] ?? {},
+            matchPercentage: finalCurvedScore,
+            personalizedMatchSummary: item['summary'] ?? '',
+            userRiasecScores: item['userRiasec'] ?? const [0,0,0,0,0,0],
+            jobRiasecScores: item['jobRiasec'] ?? const [0,0,0,0,0,0],
           ));
         }
       }
 
-      debugPrint('MATCH DEBUG: Final matched count: ${matchedJobs.length}');
+      debugPrint('MATCH DEBUG: Final processed job count: ${matchedJobs.length}');
 
       // Sort descending and limit to top 8
       matchedJobs.sort((a, b) => b.matchPercentage.compareTo(a.matchPercentage));

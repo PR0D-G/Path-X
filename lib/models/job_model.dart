@@ -83,15 +83,34 @@ class Job {
   final int salaryMax;
   final bool remotePossible;
   final bool fresherFriendly;
+  final String industry; // Maps to career_industries.industry
 
   // Existing UI mapped fields
   final List<String> coreSkills;
   final List<LearningResource> learningResources;
   final double matchPercentage;
   final String education;
+  final String personalizedMatchSummary;
+  final List<double> userRiasecScores;
+  final List<double> jobRiasecScores;
+  final Map<String, int> skillImportances; // Maps skill_name to importance
 
-  String get averageSalary =>
-      '₹${(salaryMin ~/ 100000)}L - ₹${(salaryMax ~/ 100000)}L';
+  String get averageSalary {
+    if (salaryMin == 0 && salaryMax == 0) return '₹0L';
+    
+    String formatValue(int val) {
+      if (val >= 100000) {
+        double lakhs = val / 100000.0;
+        // Show as 8L if whole, else 8.5L or 0.75L
+        return lakhs == lakhs.toInt() ? '${lakhs.toInt()}L' : '${lakhs.toStringAsFixed(lakhs < 1 ? 2 : 1)}L';
+      } else if (val >= 1000) {
+        return '${(val / 1000).toStringAsFixed(0)}k';
+      }
+      return val.toString();
+    }
+
+    return '₹${formatValue(salaryMin)} - ₹${formatValue(salaryMax)}';
+  }
   String get jobGrowthOutlook => demandLevel;
 
   const Job({
@@ -108,6 +127,11 @@ class Job {
     this.learningResources = const [],
     this.education = '',
     this.matchPercentage = 0.0,
+    this.personalizedMatchSummary = '',
+    this.userRiasecScores = const [0, 0, 0, 0, 0, 0],
+    this.jobRiasecScores = const [0, 0, 0, 0, 0, 0],
+    this.industry = '',
+    this.skillImportances = const {},
   });
 
   factory Job.fromJson(Map<String, dynamic> json) {
@@ -136,6 +160,9 @@ class Job {
           (json['education_level'] ?? json['education'])?.toString() ?? '',
       matchPercentage:
           double.tryParse(json['match_percentage']?.toString() ?? '0') ?? 0.0,
+      personalizedMatchSummary: json['personalized_summary']?.toString() ?? '',
+      userRiasecScores: json['user_riasec'] != null ? List<double>.from(json['user_riasec']) : const [0,0,0,0,0,0],
+      jobRiasecScores: json['job_riasec'] != null ? List<double>.from(json['job_riasec']) : const [0,0,0,0,0,0],
     );
   }
 }

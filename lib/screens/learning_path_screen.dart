@@ -188,10 +188,10 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
                 initiallyExpanded: status == 'in_progress',
                 leading: CircleAvatar(
                   backgroundColor: status == 'completed'
-                      ? Colors.green
-                      : (status == 'in_progress' ? Colors.blue : Colors.grey),
+                      ? const Color(0xFF43A047)
+                      : (status == 'in_progress' ? const Color(0xFF004B8D) : Colors.grey),
                   child: Icon(status == 'completed' ? Icons.check : Icons.book,
-                      color: Colors.white),
+                      color: status == 'in_progress' ? const Color(0xFFFFD700) : Colors.white),
                 ),
                 title: Text(
                   'Step \${path.stepNumber}: \${path.title}',
@@ -200,12 +200,12 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
                 subtitle: Text(path.description),
                 children: [
                   ...resources.map((r) => ListTile(
-                        leading: Icon(Icons.link, color: Colors.blue),
+                        leading: const Icon(Icons.link, color: Color(0xFF004B8D)),
                         title: Text(r.title),
                         subtitle: Text('\${r.platform} • \${r.duration}'),
                         trailing: TextButton(
                           onPressed: () => _launchURL(r.url, path.id),
-                          child: const Text('View'),
+                          child: const Text('View', style: TextStyle(color: Color(0xFF004B8D), fontWeight: FontWeight.bold)),
                         ),
                       )),
                   if (status == 'in_progress')
@@ -213,10 +213,12 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
                       padding: const EdgeInsets.all(16.0),
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green),
+                            backgroundColor: const Color(0xFF004B8D),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                         onPressed: () => _completeStep(path.id),
                         child: Text('Mark as Completed',
-                            style: GoogleFonts.poppins(color: Colors.white)),
+                            style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
                       ),
                     ),
                 ],

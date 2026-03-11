@@ -48,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             UserAccountsDrawerHeader(
               decoration: BoxDecoration(
-                  color: Colors.blue.shade800,
+                  color: const Color(0xFF004B8D), // Mumbai Indians Blue
                   image: const DecorationImage(
                     image: NetworkImage(
                         'https://images.unsplash.com/photo-1557683316-973673baf926'), // generic abstract
@@ -74,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: GoogleFonts.poppins(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: Colors.blue.shade800),
+                      color: const Color(0xFF004B8D)),
                 ),
               ),
             ),
@@ -200,7 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
             });
           },
           backgroundColor: Colors.white,
-          selectedItemColor: Colors.blue.shade700,
+          selectedItemColor: const Color(0xFF004B8D), // Mumbai Indians Blue
           unselectedItemColor: Colors.grey.shade500,
           selectedLabelStyle:
               GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600),

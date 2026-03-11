@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'dart:math' as math;
 import '../models/job_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/job_service.dart';
@@ -28,8 +29,8 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
 
   Future<List<Job>> _loadAndFilterJobs() async {
     try {
-      // Use the new matching algorithm from JobService
-      return await JobService.getMatchedCareers();
+      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+      return await JobService.getMatchedCareers(authProvider.userSkills);
     } catch (e) {
       debugPrint('Error loading matched jobs: $e');
       throw Exception('Failed to load job recommendations');
@@ -66,35 +67,48 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
     }
   }
 
-  // Get color based on match percentage
-  Color _getScoreColor(double score) {
-    if (score >= 0.8) return Colors.green;
-    if (score >= 0.6) return Colors.orange;
-    return Colors.red;
+  // Build a detail row for job information
+  Widget _buildInfoChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.blue.shade600),
+          const SizedBox(width: 6),
+          Text(label, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade800, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
   }
 
-  // Build a detail row for job information
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+  Widget _buildSkillChip(String skill, bool isMatch) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isMatch ? const Color(0xFF004B8D) : Colors.white, // MI Blue
+        borderRadius: BorderRadius.circular(8),
+        border: isMatch ? null : Border.all(color: Colors.grey.shade300),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            '$label: ',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w500,
-              fontSize: 13,
-              color: Colors.grey.shade700,
+          if (isMatch)
+            const Padding(
+              padding: EdgeInsets.only(right: 6.0),
+              child: Icon(Icons.check, size: 12, color: Color(0xFFFFD700)), // MI Gold
             ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: Colors.grey.shade800,
-              ),
+          Text(
+            skill,
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isMatch ? const Color(0xFFFFD700) : const Color(0xFF2C3E50), // MI Gold if matched
             ),
           ),
         ],
@@ -250,198 +264,235 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
                         ],
                       ),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: filteredJobs.length,
-                      itemBuilder: (context, index) {
-                        final job = filteredJobs[index];
-            final matchingSkills = _getMatchingSkills(job);
-            final missingSkills = _getMissingSkills(job);
-
-            return Card(
-              margin: const EdgeInsets.only(bottom: 20),
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Job Title and Match Score
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            job.roleTitle,
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue.shade900,
-                            ),
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final crossAxisCount = constraints.maxWidth > 800 ? 2 : 1;
+                        return GridView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: crossAxisCount,
+                            crossAxisSpacing: 20,
+                            mainAxisSpacing: 24,
+                            mainAxisExtent: 360, // Tighter fit for the card content
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _getScoreColor(job.matchPercentage / 100)
-                                .withAlpha((255 * 0.1).round()),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _getScoreColor(job.matchPercentage / 100)
-                                  .withAlpha((255 * 0.3).round()),
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            '${job.matchPercentage.toStringAsFixed(0)}% Match',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                              color: _getScoreColor(job.matchPercentage / 100),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
+                          itemCount: filteredJobs.length,
+                          itemBuilder: (context, index) {
+                            final job = filteredJobs[index];
+                            final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+                            final userSkills = authProvider.userSkills.map((s) => s.toLowerCase()).toSet();
+                            
+                            final isHighMatch = job.matchPercentage >= 90;
 
-                    // Job Details
-                    _buildDetailRow('Education', job.education),
-                    _buildDetailRow('Salary Range', job.averageSalary),
-                    _buildDetailRow('Growth Outlook', job.jobGrowthOutlook),
-
-                    // Matching Skills
-                    if (matchingSkills.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        "Your Matching Skills",
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w500,
-                          color: Colors.green.shade700,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: matchingSkills
-                            .map((skill) => Chip(
-                                  label: Text(
-                                    skill,
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                  backgroundColor: Colors.green.shade50,
-                                  side:
-                                      BorderSide(color: Colors.green.shade100),
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ))
-                            .toList(),
-                      ),
-                    ],
-
-                    // Missing Skills
-                    if (missingSkills.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        "Skills to Learn",
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w500,
-                          color: Colors.orange.shade700,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: missingSkills
-                            .map((skill) => Chip(
-                                  label: Text(
-                                    skill,
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                  backgroundColor: Colors.orange.shade50,
-                                  side:
-                                      BorderSide(color: Colors.orange.shade100),
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ))
-                            .toList(),
-                      ),
-                    ],
-
-                    // Action Buttons
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () async {
-                              final details =
-                                  await JobService.getCareerDetails(job.id!);
-                              if (context.mounted) {
-                                _showJobDetails(context, job, matchingSkills,
-                                    missingSkills, details);
-                              }
-                            },
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: Colors.blue.shade600),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: Text(
-                              'View Details',
-                              style: GoogleFonts.poppins(
-                                color: Colors.blue.shade600,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.pushNamed(
-                                context,
-                                '/learning-path',
-                                arguments: {'job': job},
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue.shade600,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: Text(
-                              'Learning Path',
-                              style: GoogleFonts.poppins(
+                            return Container(
+                              decoration: BoxDecoration(
                                 color: Colors.white,
-                                fontWeight: FontWeight.w500,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.grey.shade200),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withAlpha(8),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
+                              clipBehavior: Clip.antiAlias,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        if (isHighMatch)
+                                          Padding(
+                                            padding: const EdgeInsets.only(bottom: 8.0),
+                                            child: Row(
+                                              children: [
+                                                Text(
+                                                  "Top Career Match",
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors.grey.shade500,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                                const Expanded(child: Divider(indent: 8, endIndent: 0)),
+                                              ],
+                                            ),
+                                          ),
+                                        
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                job.roleTitle,
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: const Color(0xFF1A1A1A),
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: job.matchPercentage >= 80 
+                                                  ? const Color(0xFF4CAF50) // Green
+                                                  : job.matchPercentage >= 65 
+                                                    ? Colors.yellow.shade700 // Yellow
+                                                    : job.matchPercentage >= 55 
+                                                      ? Colors.orange.shade700 // Orange
+                                                      : Colors.red.shade700, // Red
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: Colors.white.withAlpha(50), 
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                              child: RichText(
+                                                text: TextSpan(
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: job.matchPercentage >= 65 && job.matchPercentage < 80 
+                                                      ? Colors.black87 
+                                                      : Colors.white,
+                                                    fontSize: 15,
+                                                  ),
+                                                  children: [
+                                                    TextSpan(text: '${job.matchPercentage.toStringAsFixed(0)}'),
+                                                    const TextSpan(text: '%', style: TextStyle(fontSize: 11)),
+                                                    const TextSpan(text: ' Match', style: TextStyle(fontSize: 11, fontWeight: FontWeight.normal)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${job.industry} • ${job.demandLevel} Demand',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: const Color(0xFF34495E),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        
+                                        const SizedBox(height: 12),
+                                        // Row of Info Chips
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: [
+                                            _buildInfoChip(Icons.currency_rupee, '${job.averageSalary} / year'),
+                                            _buildInfoChip(job.remotePossible ? Icons.location_on : Icons.location_on_outlined, job.remotePossible ? 'Remote' : 'On-site'),
+                                            _buildInfoChip(Icons.person, job.fresherFriendly ? 'Fresher' : 'Exp. req'),
+                                          ],
+                                        ),
+
+                                        const SizedBox(height: 12),
+                                        Row(
+                                          children: [
+                                            Text(
+                                              "Skills",
+                                              style: GoogleFonts.poppins(
+                                                fontWeight: FontWeight.bold,
+                                                color: const Color(0xFF1A1A1A),
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            const Expanded(child: Divider(indent: 8)),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        SizedBox(
+                                          height: 80, // Increased height for skills list
+                                          child: job.coreSkills.isEmpty 
+                                            ? Center(child: Text("Skills data loading or missing...", style: TextStyle(fontSize: 12, color: Colors.grey.shade400)))
+                                            : Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: job.coreSkills.take(6).map((skill) {
+                                                  return _buildSkillChip(skill, userSkills.contains(skill.toLowerCase()));
+                                                }).toList(),
+                                              ),
+                                        ),
+
+                                        const SizedBox(height: 12),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: ElevatedButton.icon(
+                                                icon: const Icon(Icons.assignment_outlined, size: 16),
+                                                label: const Text('More Info'),
+                                                onPressed: () async {
+                                                  final details = await JobService.getCareerDetails(job.id!);
+                                                  if (context.mounted) {
+                                                    _showJobDetails(context, job, _getMatchingSkills(job), _getMissingSkills(job), details);
+                                                  }
+                                                },
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.white,
+                                                  foregroundColor: const Color(0xFF2C3E50),
+                                                  elevation: 0,
+                                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Colors.grey.shade300)),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  gradient: const LinearGradient(
+                                                    colors: [Color(0xFF004B8D), Color(0xFF003566)], // MI Blue Gradient
+                                                    begin: Alignment.topLeft,
+                                                    end: Alignment.bottomRight,
+                                                  ),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: const Color(0xFF004B8D).withAlpha(50),
+                                                      blurRadius: 8,
+                                                      offset: const Offset(0, 4),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: ElevatedButton.icon(
+                                                  icon: const Icon(Icons.auto_fix_high, size: 16, color: Color(0xFFFFD700)), // MI Gold
+                                                  label: const Text('Learning Path'),
+                                                  onPressed: () => Navigator.pushNamed(context, '/learning-path', arguments: {'job': job}),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.transparent,
+                                                    foregroundColor: const Color(0xFFFFD700), // MI Gold
+                                                    elevation: 0,
+                                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
                       },
                     ),
             ),
@@ -461,273 +512,362 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.9,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (_, controller) => SingleChildScrollView(
-          controller: controller,
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                  ),
+        initialChildSize: 0.94,
+        minChildSize: 0.6,
+        maxChildSize: 0.94,
+        builder: (_, controller) => Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFFF8F9FE),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          ),
+          child: Column(
+            children: [
+              // Custom Modal Handle & App Bar
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1E56A0),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
                 ),
-                const SizedBox(height: 20),
-                Text(
-                  job.roleTitle,
-                  style: GoogleFonts.poppins(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.blue.shade900,
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Job Details
-                _buildDetailItem(
-                    Icons.school, 'Education Required', job.education),
-                _buildDetailItem(
-                    Icons.attach_money, 'Average Salary', job.averageSalary),
-                _buildDetailItem(
-                    Icons.trending_up, 'Job Growth', job.jobGrowthOutlook),
-                const SizedBox(height: 8),
-
-                // Matching Skills
-                Text(
-                  'Your Matching Skills',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (matchingSkills.isEmpty)
-                  Text('None',
-                      style: GoogleFonts.poppins(color: Colors.grey.shade600))
-                else
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: matchingSkills
-                        .map((skill) => Chip(
-                              label: Text(skill),
-                              backgroundColor: Colors.green.shade50,
-                              labelStyle:
-                                  TextStyle(color: Colors.green.shade800),
-                            ))
-                        .toList(),
-                  ),
-
-                // Missing Skills
-                if (missingSkills.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  Text(
-                    'Skills to Develop',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: missingSkills
-                        .map((skill) => Chip(
-                              label: Text(skill),
-                              backgroundColor: Colors.orange.shade50,
-                              labelStyle:
-                                  TextStyle(color: Colors.orange.shade800),
-                            ))
-                        .toList(),
-                  ),
-                ],
-
-                const SizedBox(height: 24),
-                // Additional Career Details fetched from Supabase
-                if (details['tasks']!.isNotEmpty) ...[
-                  Text(
-                    'Day in the Life (Tasks)',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...details['tasks']!.map((task) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('• ', style: TextStyle(fontSize: 16)),
-                            Expanded(
-                                child:
-                                    Text(task, style: GoogleFonts.poppins())),
-                          ],
+                child: Column(
+                  children: [
+                    Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white.withAlpha(80), borderRadius: BorderRadius.circular(2))),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back, color: Colors.white)),
+                        Expanded(
+                          child: Text(
+                            "${job.roleTitle} - Career Details",
+                            style: GoogleFonts.poppins(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      )),
-                  const SizedBox(height: 20),
-                ],
-
-                if (details['salary_levels']!.isNotEmpty) ...[
-                  Text(
-                    'Salary Levels',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...details['salary_levels']!.map((salary) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('• ', style: TextStyle(fontSize: 16)),
-                            Expanded(
-                                child:
-                                    Text(salary, style: GoogleFonts.poppins())),
-                          ],
+                  ],
+                ),
+              ),
+              
+              Expanded(
+                child: ListView(
+                  controller: controller,
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    // Match Breakdown Card
+                    _buildSectionHeader("Match Breakdown"),
+                    Center(child: _buildRadarChart(job)),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildLegendItem(const Color(0xFF1E56A0), "You"),
+                        const SizedBox(width: 24),
+                        _buildLegendItem(Colors.green, "Job Fit"),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Skills Comparison
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildMiniHeader("You Have"),
+                              const SizedBox(height: 12),
+                              ...matchingSkills.take(4).map((s) => _buildSimpleMatchItem(s, true)),
+                            ],
+                          ),
                         ),
-                      )),
-                  const SizedBox(height: 20),
-                ],
-
-                if (details['industries']!.isNotEmpty) ...[
-                  Text(
-                    'Top Industries',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildMiniHeader("You Need"),
+                              const SizedBox(height: 12),
+                              ...missingSkills.take(4).map((s) => _buildSimpleMatchItem(s, false)),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: details['industries']!
-                        .map((ind) => Chip(
-                              label: Text(ind),
-                              backgroundColor: Colors.purple.shade50,
-                              labelStyle:
-                                  TextStyle(color: Colors.purple.shade800),
-                            ))
-                        .toList(),
-                  ),
-                  const SizedBox(height: 20),
-                ],
+                    const SizedBox(height: 32),
 
-                if (details['companies']!.isNotEmpty) ...[
-                  Text(
-                    'Top Companies Hiring',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: details['companies']!
-                        .map((comp) => Chip(
-                              label: Text(comp),
-                              backgroundColor: Colors.teal.shade50,
-                              labelStyle:
-                                  TextStyle(color: Colors.teal.shade800),
-                            ))
-                        .toList(),
-                  ),
-                ],
+                    // Day in the Life
+                    if (details['tasks']!.isNotEmpty) ...[
+                      _buildSectionHeaderWithIcon(Icons.cloud_queue, "Day in the Life"),
+                      const SizedBox(height: 12),
+                      ...details['tasks']!.map((task) => _buildTaskItem(task)),
+                      const SizedBox(height: 32),
+                    ],
 
-                const SizedBox(height: 30),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context); // Close the modal first
-                      Navigator.pushNamed(
-                        context,
-                        '/learning-path',
-                        arguments: {'job': job},
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade600,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                    // Salary & Outlook
+                    _buildSectionHeaderWithIcon(Icons.groups_outlined, "Salary & Outlook"),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade100)),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              _buildOutlookItem("Entry", "₹${(job.salaryMin ~/ 100000)}L - ₹${(job.salaryMin ~/ 80000)}L"),
+                              const Expanded(child: SizedBox()),
+                              _buildOutlookItem("Mid-Level", "₹${(job.salaryMin ~/ 70000)}L - ₹${(job.salaryMax ~/ 100000)}L"),
+                            ],
+                          ),
+                          const Divider(height: 32),
+                          Row(
+                            children: [
+                              _buildOutlookItem("Senior", "₹${(job.salaryMax ~/ 100000)}L+"),
+                              const Expanded(child: SizedBox()),
+                              Expanded(flex: 2, child: Text(job.description, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade600), maxLines: 2)),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    child: Text(
-                      'View Learning Path',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
+                    const SizedBox(height: 32),
+
+                    // Who Hires
+                    _buildSectionHeaderWithIcon(Icons.location_on_outlined, "Who Hires?"),
+                    const SizedBox(height: 12),
+                    if (details['industries']!.isNotEmpty)
+                      _buildDetailRowInline("Industries:", details['industries']!.join(', ')),
+                    if (details['companies']!.isNotEmpty)
+                      _buildDetailRowInline("Companies:", details['companies']!.join(', ')),
+                    
+                    const SizedBox(height: 40),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pushNamed(context, '/learning-path', arguments: {'job': job}),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF004B8D), // Mumbai Indians Blue
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 4,
+                          shadowColor: const Color(0xFF004B8D).withAlpha(100),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.auto_fix_high, color: Color(0xFFFFD700)), // Gold icon
+                            const SizedBox(width: 8),
+                            Text(
+                              "Start Learning Path", 
+                              style: GoogleFonts.poppins(
+                                fontSize: 16, 
+                                fontWeight: FontWeight.bold, 
+                                color: Colors.white
+                              )
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 20),
+                  ],
                 ),
-                const SizedBox(height: 20),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildDetailItem(IconData icon, String label, String value) {
+  Widget _buildRadarChart(Job job) {
+    const List<String> riasecLabels = ['R', 'I', 'A', 'S', 'E', 'C'];
+    final List<double> userScores = job.userRiasecScores.map((e) => e / 100.0).toList(); // Normalize to 0-1
+    final List<double> jobScores = job.jobRiasecScores.map((e) => e / 100.0).toList(); // Normalize to 0-1
+
+    return SizedBox(
+      width: 250,
+      height: 250,
+      child: CustomPaint(
+        painter: RadarChartPainter(
+          userScores: userScores,
+          jobScores: jobScores,
+          labels: riasecLabels,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: Colors.blue.shade700),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value.isNotEmpty ? value : 'Not specified',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: Colors.grey.shade900,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+          const Expanded(child: Divider()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(title, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
           ),
+          const Expanded(child: Divider()),
         ],
       ),
     );
   }
+
+  Widget _buildSectionHeaderWithIcon(IconData icon, String title) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: const Color(0xFF1E56A0)),
+        const SizedBox(width: 8),
+        Text(title, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF1E56A0))),
+        const Expanded(child: Divider(indent: 12)),
+      ],
+    );
+  }
+
+  Widget _buildMiniHeader(String title) {
+    return Text(title, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade600));
+  }
+
+  Widget _buildLegendItem(Color color, String label) {
+    return Row(
+      children: [
+        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Text(label, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+
+  Widget _buildSimpleMatchItem(String text, bool isHave) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(color: isHave ? Colors.green.withAlpha(10) : Colors.blue.withAlpha(10), borderRadius: BorderRadius.circular(8)),
+      child: Row(
+        children: [
+          Icon(isHave ? Icons.check_circle : Icons.check_circle_outline, size: 16, color: isHave ? Colors.green : Colors.blue),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskItem(String task) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("• ", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E56A0))),
+          Expanded(child: Text(task, style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade800))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOutlookItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 2),
+        Text(value, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+      ],
+    );
+  }
+
+  Widget _buildDetailRowInline(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: RichText(
+        text: TextSpan(
+          style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade800),
+          children: [
+            TextSpan(text: "$label ", style: const TextStyle(fontWeight: FontWeight.bold)),
+            TextSpan(text: value),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class RadarChartPainter extends CustomPainter {
+  final List<double> userScores;
+  final List<double> jobScores;
+  final List<String> labels;
+
+  RadarChartPainter({required this.userScores, required this.jobScores, required this.labels});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2 * 0.8;
+    final sides = labels.length;
+    final angle = (2 * math.pi) / sides;
+
+    // Draw background polygons (5 levels)
+    final gridPaint = Paint()..color = Colors.grey.shade300..style = PaintingStyle.stroke..strokeWidth = 1.0;
+    for (var i = 1; i <= 5; i++) {
+        final path = Path();
+        final levelRadius = radius * (i / 5);
+        for (var j = 0; j < sides; j++) {
+            final x = center.dx + levelRadius * math.cos(j * angle - math.pi / 2);
+            final y = center.dy + levelRadius * math.sin(j * angle - math.pi / 2);
+            if (j == 0) path.moveTo(x, y); else path.lineTo(x, y);
+        }
+        path.close();
+        canvas.drawPath(path, gridPaint);
+    }
+
+    // Draw axes
+    for (var i = 0; i < sides; i++) {
+        final x = center.dx + radius * math.cos(i * angle - math.pi / 2);
+        final y = center.dy + radius * math.sin(i * angle - math.pi / 2);
+        canvas.drawLine(center, Offset(x, y), gridPaint);
+        
+        // Draw Labels
+        final textPainter = TextPainter(
+          text: TextSpan(text: labels[i], style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        final lx = center.dx + (radius + 15) * math.cos(i * angle - math.pi / 2) - textPainter.width / 2;
+        final ly = center.dy + (radius + 15) * math.sin(i * angle - math.pi / 2) - textPainter.height / 2;
+        textPainter.paint(canvas, Offset(lx, ly));
+    }
+
+    // Draw Job Scores Polygon
+    _drawPolygon(canvas, center, radius, angle, jobScores, Colors.green.withAlpha(80), Colors.green, 2.0);
+    // Draw User Scores Polygon
+    _drawPolygon(canvas, center, radius, angle, userScores, const Color(0xFF1E56A0).withAlpha(100), const Color(0xFF1E56A0), 2.5);
+  }
+
+  void _drawPolygon(Canvas canvas, Offset center, double radius, double angle, List<double> scores, Color fillColor, Color outlineColor, double strokeWidth) {
+    final path = Path();
+    for (var i = 0; i < scores.length; i++) {
+        final r = radius * scores[i].clamp(0.0, 1.0);
+        final x = center.dx + r * math.cos(i * angle - math.pi / 2);
+        final y = center.dy + r * math.sin(i * angle - math.pi / 2);
+        if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+    }
+    path.close();
+    canvas.drawPath(path, Paint()..color = fillColor..style = PaintingStyle.fill);
+    canvas.drawPath(path, Paint()..color = outlineColor..style = PaintingStyle.stroke..strokeWidth = strokeWidth);
+    
+    // Draw points
+    final pointPaint = Paint()..color = outlineColor..style = PaintingStyle.fill;
+    for (var i = 0; i < scores.length; i++) {
+        final r = radius * scores[i].clamp(0.0, 1.0);
+        final x = center.dx + r * math.cos(i * angle - math.pi / 2);
+        final y = center.dy + r * math.sin(i * angle - math.pi / 2);
+        canvas.drawCircle(Offset(x, y), 3.5, pointPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
