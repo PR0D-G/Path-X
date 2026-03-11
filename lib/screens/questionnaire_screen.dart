@@ -108,23 +108,29 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
       _isLoadingQuestions = true;
     });
 
+    // Generate HIGHLY varied mock data for testing differentiation
+    // We want a clear "Professional STEM" profile
+    final Map<String, double> variedScores = {
+      'Realistic': 5.0,
+      'Investigative': 5.0,
+      'Artistic': 1.0,
+      'Social': 2.0,
+      'Enterprising': 2.0,
+      'Conventional': 4.0,
+    };
+
     for (int i = 0; i < _questions.length; i++) {
       final q = _questions[i];
       final category = q['category'] as String?;
       final isMath = q['isMath'] == true;
       final options = q['options'] as List<dynamic>?;
 
-      if ([
-        'Realistic',
-        'Investigative',
-        'Artistic',
-        'Social',
-        'Enterprising',
-        'Conventional'
-      ].contains(category)) {
-        _answers[i] = 4.0; // High rating
+      if (category != null && variedScores.containsKey(category)) {
+        _answers[i] = variedScores[category];
       } else if (isMath || options != null) {
-        _answers[i] = q['correct_answer'] ?? (options?.first ?? 'Option A');
+        // Use either 'correct_answer' or 'answer' depending on table schema
+        final correctAnswer = q['correct_answer'] ?? q['answer'];
+        _answers[i] = correctAnswer ?? (options?.first ?? 'Option A');
       } else {
         _answers[i] = 'Dummy Answer';
       }
@@ -184,11 +190,11 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
             riasecScores[category] = (riasecScores[category] ?? 0) + points;
           } else {
             // Aptitude + Math Phase (Multiple choice options)
-            final selectedStr = rawAnswer.toString().trim();
-            final correctStr =
-                (question['correct_answer'] ?? '').toString().trim();
+            final String selectedStr = rawAnswer.toString().trim().toLowerCase();
+            // Handle schema variations: check 'correct_answer' and 'answer'
+            final String correctStr = (question['correct_answer'] ?? question['answer'] ?? '').toString().trim().toLowerCase();
 
-            if (selectedStr == correctStr) {
+            if (selectedStr.isNotEmpty && selectedStr == correctStr) {
               if (isMath) {
                 mathScore++;
               } else if (category == 'Logic') {

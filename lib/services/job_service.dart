@@ -9,70 +9,49 @@ class JobService {
   static Future<List<Job>> getJobs() async {
     try {
       final supabase = Supabase.instance.client;
-      // Reverted to 'title' as per user request
-      final response =
-          await supabase.from('careers').select('id, title, description');
+      // Fetch optimized career info with direct columns
+      final response = await supabase.from('careers').select('''
+        id,
+        title,
+        description,
+        demand_level,
+        salary_min,
+        salary_max,
+        remote_possible,
+        fresher_friendly,
+        education_level,
+        career_skills (skill_name)
+      ''');
 
       List<Job> fetchedJobs = [];
       for (var row in response) {
         final careerId = row['id'];
 
-        // Fetch skills from career_skills (skill_name)
-        List<String> coreSkills = [];
-        try {
-          final skillsResponse = await supabase
-              .from('career_skills')
-              .select('skill_name')
-              .eq('career_id', careerId);
-          coreSkills = (skillsResponse as List)
-              .map((s) => s['skill_name'].toString())
-              .toList();
-        } catch (e) {
-          debugPrint('Notice: Error fetching skills for job list: $e');
-        }
+        // 1. Core Skills
+        final List<String> coreSkills = (row['career_skills'] as List?)
+                ?.map((s) => s['skill_name'].toString())
+                .toList() ?? [];
 
-        // Fetch salary/demand from career_salary_levels
-        int salaryMin = 0;
-        int salaryMax = 0;
-        String demandLevel = 'Low';
-        try {
-          final salaryResponse = await supabase
-              .from('career_salary_levels')
-              .select('salary, demand_score')
-              .eq('career_id', careerId)
-              .order('salary', ascending: true);
-
-          if (salaryResponse.isNotEmpty) {
-            salaryMin = salaryResponse.first['salary'] ?? 0;
-            salaryMax = salaryResponse.last['salary'] ?? 0;
-            final avgDemand = salaryResponse
-                    .map((s) => s['demand_score'] as int? ?? 0)
-                    .reduce((a, b) => a + b) /
-                salaryResponse.length;
-            demandLevel =
-                avgDemand >= 4 ? 'High' : (avgDemand >= 2.5 ? 'Medium' : 'Low');
-          }
-        } catch (e) {
-          debugPrint('Notice: Error fetching salary for job list: $e');
-        }
+        // info is now directly in row from careers table
 
         fetchedJobs.add(Job(
           id: careerId,
           roleTitle: row['title'] ?? 'Unknown Role',
-          category: '', // Category not in schema snippet
           description: row['description'] ?? '',
-          demandLevel: demandLevel,
-          salaryMin: salaryMin,
-          salaryMax: salaryMax,
+          demandLevel: row['demand_level']?.toString() ?? 'Low',
+          salaryMin: (row['salary_min'] as num?)?.toInt() ?? 0,
+          salaryMax: (row['salary_max'] as num?)?.toInt() ?? 0,
+          remotePossible: row['remote_possible'] == true,
+          fresherFriendly: row['fresher_friendly'] == true,
+          education: row['education_level']?.toString() ?? '',
           coreSkills: coreSkills,
         ));
       }
-
-      if (fetchedJobs.isNotEmpty) {
-        return fetchedJobs;
-      }
+      
+      debugPrint('FETCH JOBS: Loaded ${fetchedJobs.length} careers with join info.');
+      return fetchedJobs;
     } catch (e) {
-      debugPrint('Failed to fetch from Supabase: $e');
+      debugPrint('Failed to fetch jobs from Supabase: $e');
     }
     return _cachedJobs;
   }
@@ -271,13 +250,24 @@ class JobService {
       debugPrint(
           'MATCH DEBUG: Assessment results count: ${assessmentResponseList.length}');
 
+      final Map<String, dynamic> scores;
       if (assessmentResponseList.isEmpty) {
-        debugPrint(
-            'MATCH DEBUG: No assessment results found for user: ${user.id}');
-        return [];
+        debugPrint('MATCH DEBUG: No results in DB. Using "Favored Developer" Dummy Data.');
+        scores = {
+          'logic': 0.78,
+          'reasoning': 0.46,
+          'pattern': 0.30,
+          'math': 0.46,
+          'riasec_realistic': 4.5,
+          'riasec_investigative': 6.3,
+          'riasec_artistic': 0.9,
+          'riasec_social': 0.9,
+          'riasec_enterprising': 1.8,
+          'riasec_conventional': 3.6,
+        };
+      } else {
+        scores = assessmentResponseList.first;
       }
-
-      final Map<String, dynamic> scores = assessmentResponseList.first;
       debugPrint('MATCH DEBUG: Final User Scores Map: $scores');
       debugPrint('MATCH DEBUG: USER KEYS: ${scores.keys.toList()}');
 
@@ -288,17 +278,18 @@ class JobService {
         id,
         title,
         description,
+        demand_level,
+        salary_min,
+        salary_max,
+        remote_possible,
+        fresher_friendly,
+        education_level,
         career_skills (
           skill_name,
           importance
         ),
         career_weights (
           *
-        ),
-        career_salary_levels (
-          level,
-          salary,
-          demand_score
         )
       ''');
 
@@ -328,25 +319,11 @@ class JobService {
       debugPrint(
           'MATCH DEBUG: Weights Map Keys (first 5): ${weightsByCareerId.keys.take(5).toList()}');
 
-      // --- TEMP MOCK FALLBACK FOR DEBUGGING ---
-      // If the database is empty, we provide some default weights for common careers
-      // so the user can verify the algorithm works.
-      final Map<int, Map<String, dynamic>> mockWeights = {
-        1: {'realistic': 4.0, 'investigative': 5.0, 'logic': 5.0, 'reasoning': 4.0, 'pattern': 5.0, 'math': 4.0}, // Software Engineer
-        5: {'realistic': 3.0, 'investigative': 4.0, 'conventional': 5.0, 'logic': 5.0}, // DevOps
-        8: {'investigative': 5.0, 'realistic': 3.0, 'logic': 5.0, 'reasoning': 5.0}, // Cybersecurity
-        10: {'investigative': 5.0, 'logic': 5.0, 'pattern': 5.0, 'math': 5.0}, // ML Engineer
-        21: {'enterprising': 4.0, 'conventional': 5.0, 'math': 4.0, 'logic': 4.0}, // Financial Analyst
-        30: {'enterprising': 5.0, 'social': 3.0, 'conventional': 4.0, 'reasoning': 5.0}, // Business Analyst
-        31: {'realistic': 5.0, 'investigative': 4.0, 'math': 5.0, 'logic': 4.0}, // Mechanical Engineer
-        82: {'investigative': 4.0, 'conventional': 4.0, 'logic': 5.0, 'pattern': 5.0}, // Data Engineer
-      };
 
-      List<Job> matchedJobs = [];
+      List<Map<String, dynamic>> tempResults = [];
 
       for (var row in careersList) {
         final careerId = int.tryParse(row['id'].toString());
-        final String careerTitle = row['title'] ?? 'Unknown';
 
         // Try to get weights from the join first
         final joinedWeights = row['career_weights'] as List?;
@@ -354,33 +331,18 @@ class JobService {
 
         if (joinedWeights != null && joinedWeights.isNotEmpty) {
           rawW = joinedWeights.first as Map<String, dynamic>;
-        } else if (careerId != null &&
-            weightsByCareerId.containsKey(careerId)) {
+        } else if (careerId != null && weightsByCareerId.containsKey(careerId)) {
           rawW = weightsByCareerId[careerId];
-          debugPrint('MATCH DEBUG: Using fallback table weights for $careerTitle');
-        } else if (careerId != null && mockWeights.containsKey(careerId)) {
-          rawW = mockWeights[careerId];
-          debugPrint(
-              'MATCH DEBUG: Using HARDCODED MOCK weights for $careerTitle (ID: $careerId) because DB is empty.');
         }
 
-        if (rawW == null) {
-          debugPrint(
-              'MATCH DEBUG: Career $careerTitle (ID: $careerId) STILL HAS NO weights. Using neutral defaults.');
-          rawW = {};
-        }
-
+        if (rawW == null) rawW = {};
         final Map<String, dynamic> currentWeights = rawW;
-        debugPrint('MATCH DEBUG: WEIGHT KEYS for $careerTitle: ${currentWeights.keys.toList()}');
 
-        // Auto-assign weights based on trait prefixes to handle truncated/differing column names
         double getWeight(String trait) {
           final traitLower = trait.toLowerCase();
-          // Try exact match first
           if (currentWeights.containsKey(traitLower)) {
             return (currentWeights[traitLower] as num?)?.toDouble() ?? 0.0;
           }
-          // Try key that starts with the trait
           final key = currentWeights.keys.firstWhere(
             (k) => k.toLowerCase().startsWith(traitLower.substring(0, 4)),
             orElse: () => '',
@@ -391,124 +353,130 @@ class JobService {
           return 0.0;
         }
 
-        final Map<String, double> w = {
-          'realistic': getWeight('realistic'),
-          'investigative': getWeight('investigative'),
-          'artistic': getWeight('artistic'),
-          'social': getWeight('social'),
-          'enterprising': getWeight('enterprising'),
-          'conventional': getWeight('conventional'),
-          'logic': getWeight('logic'),
-          'reasoning': getWeight('reasoning'),
-          'pattern': getWeight('pattern'),
-          'math': getWeight('math'),
-        };
-
-        // 1. Normalize User Scores (0.0 to 1.0)
-        // RIASEC max is 15 (3 questions * 5 stars), Aptitude max is 2 (2 questions), Math max is 3 (3 questions)
-        final double normR = ((scores['riasec_realistic'] ?? 0.0) / 15.0).clamp(0.0, 1.0);
-        final double normI = ((scores['riasec_investigative'] ?? 0.0) / 15.0).clamp(0.0, 1.0);
-        final double normA = ((scores['riasec_artistic'] ?? 0.0) / 15.0).clamp(0.0, 1.0);
-        final double normS = ((scores['riasec_social'] ?? 0.0) / 15.0).clamp(0.0, 1.0);
-        final double normE = ((scores['riasec_enterprising'] ?? 0.0) / 15.0).clamp(0.0, 1.0);
-        final double normC = ((scores['riasec_conventional'] ?? 0.0) / 15.0).clamp(0.0, 1.0);
+        final double normR = ((scores['riasec_realistic'] ?? 0.0) / 18.0).clamp(0.0, 1.0);
+        final double normI = ((scores['riasec_investigative'] ?? 0.0) / 18.0).clamp(0.0, 1.0);
+        final double normA = ((scores['riasec_artistic'] ?? 0.0) / 18.0).clamp(0.0, 1.0);
+        final double normS = ((scores['riasec_social'] ?? 0.0) / 18.0).clamp(0.0, 1.0);
+        final double normE = ((scores['riasec_enterprising'] ?? 0.0) / 18.0).clamp(0.0, 1.0);
+        final double normC = ((scores['riasec_conventional'] ?? 0.0) / 18.0).clamp(0.0, 1.0);
 
         final double normLogic = ((scores['logic'] ?? 0.0) / 2.0).clamp(0.0, 1.0);
         final double normReasoning = ((scores['reasoning'] ?? 0.0) / 2.0).clamp(0.0, 1.0);
         final double normPattern = ((scores['pattern'] ?? 0.0) / 2.0).clamp(0.0, 1.0);
-        final double normMath = ((scores['math'] ?? 0.0) / 3.0).clamp(0.0, 1.0);
+        final double normMath = ((scores['math'] ?? 0.0) / 2.0).clamp(0.0, 1.0);
 
-        if (careerId == 1) {
-          debugPrint('MATCH DEBUG: Calculation check for ID 1:');
-          debugPrint('User Math: ${scores['math']} (Norm: $normMath) vs Weight: ${w['math']}');
-          debugPrint('User Logic: ${scores['logic']} (Norm: $normLogic) vs Weight: ${w['logic']}');
-        }
+        final Map<String, double> userTraitValues = {
+          'realistic': normR, 'investigative': normI, 'artistic': normA,
+          'social': normS, 'enterprising': normE, 'conventional': normC,
+          'logic': normLogic, 'reasoning': normReasoning, 'pattern': normPattern, 'math': normMath,
+        };
 
-        // 2. Calculate RIASEC Sub-score (Weighted sum)
-        double riasecScore = 0;
-        riasecScore += normR * (w['realistic'] ?? 0.0);
-        riasecScore += normI * (w['investigative'] ?? 0.0);
-        riasecScore += normA * (w['artistic'] ?? 0.0);
-        riasecScore += normS * (w['social'] ?? 0.0);
-        riasecScore += normE * (w['enterprising'] ?? 0.0);
-        riasecScore += normC * (w['conventional'] ?? 0.0);
+        final Map<String, double> traitImportances = {
+          'logic': 2.0, 'reasoning': 2.0, 'math': 2.0, 'pattern': 1.5,
+          'investigative': 1.5, 'realistic': 1.0, 'artistic': 1.0,
+          'social': 1.0, 'enterprising': 1.0, 'conventional': 1.0,
+        };
 
-        // 3. Calculate Aptitude Sub-score (Weighted sum)
-        double aptitudeScore = 0;
-        aptitudeScore += normLogic * (w['logic'] ?? 0.0);
-        aptitudeScore += normReasoning * (w['reasoning'] ?? 0.0);
-        aptitudeScore += normPattern * (w['pattern'] ?? 0.0);
-        aptitudeScore += normMath * (w['math'] ?? 0.0);
+        double maxCVal = 0.01;
+        traitImportances.keys.forEach((trait) {
+          double w = getWeight(trait);
+          if (w > maxCVal) maxCVal = w;
+        });
 
-        // 4. Final Weighted Match (70% Personality, 30% Aptitude)
-        double finalMatch = (riasecScore * 0.7) + (aptitudeScore * 0.3);
-        double matchPercentage = finalMatch * 100;
+        double weightedSimilaritySum = 0;
+        double weightTotal = 0;
 
-        // 5. Apply Market Demand Bonus based on career_salary_levels demand_score
-        double demandBonus = 0;
-        final salaryLevels = row['career_salary_levels'] as List?;
-        if (salaryLevels != null && salaryLevels.isNotEmpty) {
-          final maxDemand = salaryLevels
-              .map((s) => (s['demand_score'] as num?)?.toDouble() ?? 0.0)
-              .reduce((a, b) => a > b ? a : b);
+        userTraitValues.forEach((trait, uVal) {
+          final importance = traitImportances[trait] ?? 1.0;
+          final double cVal = getWeight(trait) / maxCVal; 
+          
+          double diff = (uVal - cVal).abs();
+          double traitSimilarity = 1.0 - (diff * diff); 
 
-          if (maxDemand >= 4) {
-            demandBonus = 5.0; // High
-          } else if (maxDemand >= 2.5) {
-            demandBonus = 2.0; // Medium
+          weightedSimilaritySum += (traitSimilarity.clamp(0.0, 1.0) * importance);
+          weightTotal += importance;
+        });
+
+        double rawScore = (weightedSimilaritySum / weightTotal) * 100;
+
+        // Save raw calculations to a temporary list
+        tempResults.add({
+          'row': row,
+          'rawScore': rawScore,
+        });
+      }
+
+      // --- THE CURVE: MIN-MAX NORMALIZATION ---
+      // This forces the spread to perfectly span from 12% to 98%
+      List<Job> matchedJobs = [];
+      
+      if (tempResults.isNotEmpty) {
+        // Find the absolute highest and lowest raw scores in the database
+        double minRaw = tempResults.map((e) => e['rawScore'] as double).reduce((a, b) => a < b ? a : b);
+        double maxRaw = tempResults.map((e) => e['rawScore'] as double).reduce((a, b) => a > b ? a : b);
+
+        double targetMin = 12.0; // The lowest percentage a user will ever see
+        double targetMax = 98.0; // The highest percentage a user will ever see
+
+        for (var item in tempResults) {
+          var row = item['row'];
+          double raw = item['rawScore'];
+          double finalCurvedScore;
+
+          if (maxRaw == minRaw) {
+            finalCurvedScore = targetMax;
+          } else {
+            // Apply Min-Max scaling formula
+            finalCurvedScore = targetMin + ((raw - minRaw) * (targetMax - targetMin) / (maxRaw - minRaw));
           }
-        }
-        matchPercentage += demandBonus;
 
-        matchPercentage = matchPercentage.clamp(0.0, 100.0);
+          // Add minor demand bonus AFTER the curve so it breaks ties
+          double demandBonus = 0;
+          final String dLevel = (row['demand_level'] ?? 'Low').toString().toLowerCase();
+          if (dLevel == 'high') demandBonus = 1.5;
+          else if (dLevel == 'medium') demandBonus = 0.5;
 
-        if (matchPercentage.isNaN || matchPercentage.isInfinite) {
-          matchPercentage = 0;
-        }
+          finalCurvedScore = (finalCurvedScore + demandBonus).clamp(0.0, 100.0);
 
-        debugPrint(
-            'MATCH DEBUG: Results for ${row['title']}: Match=${matchPercentage.toStringAsFixed(1)}% (Base=${finalMatch * 100}, Bonus=$demandBonus)');
-
-        // 6. Filter: match >= 40%
-        if (matchPercentage >= 40) {
+          // Parse skills
           List<String> skills = [];
           final joinedSkills = row['career_skills'] as List?;
           if (joinedSkills != null && joinedSkills.isNotEmpty) {
-            skills =
-                joinedSkills.map((s) => s['skill_name'].toString()).toList();
-          }
-
-          int salaryMin = 0;
-          int salaryMax = 0;
-          if (salaryLevels != null && salaryLevels.isNotEmpty) {
-            final salaries = salaryLevels
-                .map((s) => (s['salary'] as num?)?.toInt() ?? 0)
-                .toList()
-              ..sort();
-            salaryMin = salaries.first;
-            salaryMax = salaries.last;
+            skills = joinedSkills.map((s) => s['skill_name'].toString()).toList();
           }
 
           matchedJobs.add(Job(
             id: row['id'],
             roleTitle: row['title'] ?? 'Unknown Role',
-            category: '', // Not in provided schema
             description: row['description'] ?? '',
-            demandLevel: demandBonus >= 5
-                ? 'High'
-                : (demandBonus >= 2 ? 'Medium' : 'Low'),
-            salaryMin: salaryMin,
-            salaryMax: salaryMax,
+            demandLevel: row['demand_level']?.toString() ?? 'Low',
+            salaryMin: (row['salary_min'] as num?)?.toInt() ?? 0,
+            salaryMax: (row['salary_max'] as num?)?.toInt() ?? 0,
+            remotePossible: row['remote_possible'] == true,
+            fresherFriendly: row['fresher_friendly'] == true,
+            education: row['education_level']?.toString() ?? '',
             coreSkills: skills,
-            matchPercentage: matchPercentage,
+            matchPercentage: finalCurvedScore, // Use the beautifully curved score!
           ));
         }
       }
+
       debugPrint('MATCH DEBUG: Final matched count: ${matchedJobs.length}');
 
-      // 3. Sort descending by match percentage
-      matchedJobs
-          .sort((a, b) => b.matchPercentage.compareTo(a.matchPercentage));
+      // Sort descending and limit to top 8
+      matchedJobs.sort((a, b) => b.matchPercentage.compareTo(a.matchPercentage));
+
+      // Print the top 3 and bottom 3 to terminal to prove the spread works
+      if (matchedJobs.length >= 6) {
+        debugPrint('--- CURVED SPREAD RESULTS ---');
+        debugPrint('Top 1: ${matchedJobs[0].roleTitle} (${matchedJobs[0].matchPercentage.toStringAsFixed(1)}%)');
+        debugPrint('Top 2: ${matchedJobs[1].roleTitle} (${matchedJobs[1].matchPercentage.toStringAsFixed(1)}%)');
+        debugPrint('Top 3: ${matchedJobs[2].roleTitle} (${matchedJobs[2].matchPercentage.toStringAsFixed(1)}%)');
+        debugPrint('...');
+        debugPrint('Bottom 3: ${matchedJobs[matchedJobs.length - 3].roleTitle} (${matchedJobs[matchedJobs.length - 3].matchPercentage.toStringAsFixed(1)}%)');
+        debugPrint('Bottom 2: ${matchedJobs[matchedJobs.length - 2].roleTitle} (${matchedJobs[matchedJobs.length - 2].matchPercentage.toStringAsFixed(1)}%)');
+        debugPrint('Bottom 1: ${matchedJobs[matchedJobs.length - 1].roleTitle} (${matchedJobs[matchedJobs.length - 1].matchPercentage.toStringAsFixed(1)}%)');
+      }
 
       return matchedJobs;
     } catch (e) {

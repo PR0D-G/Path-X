@@ -17,6 +17,8 @@ class JobRecommendationsScreen extends StatefulWidget {
 
 class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
   late Future<List<Job>> _jobsFuture;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -106,11 +108,6 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
     return _buildRecommendationsTab(context);
   }
 
-  // Sort jobs by match percentage (highest first) and filter
-  List<Job> _sortJobsByMatch(List<Job> jobs) {
-    // The jobs coming from getMatchedCareers are already sorted and filtered
-    return jobs;
-  }
 
   Widget _buildRecommendationsTab(BuildContext context) {
     return FutureBuilder<List<Job>>(
@@ -132,20 +129,132 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
             ),
           );
         }
-
-        final jobs = snapshot.data ?? [];
-        if (jobs.isEmpty) {
-          return const Center(child: Text('No job recommendations available.'));
+        final allJobs = snapshot.data ?? [];
+        if (allJobs.isEmpty) {
+          return const Center(child: Text('No job recommendations available for your profile.'));
         }
 
-        // Sort jobs by match percentage
-        final sortedJobs = _sortJobsByMatch(jobs);
+        // Apply filtering logic
+        final List<Job> filteredJobs;
+        if (_searchQuery.isEmpty) {
+          // Default view: Only high-match jobs (>= 40%)
+          filteredJobs = allJobs.where((job) => job.matchPercentage >= 40.0).toList();
+        } else {
+          // Search view: Show all jobs that match the text, regardless of percentage
+          final query = _searchQuery.toLowerCase();
+          filteredJobs = allJobs.where((job) {
+            return job.roleTitle.toLowerCase().contains(query) ||
+                   job.description.toLowerCase().contains(query) ||
+                   job.coreSkills.any((skill) => skill.toLowerCase().contains(query));
+          }).toList();
+        }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: sortedJobs.length,
-          itemBuilder: (context, index) {
-            final job = sortedJobs[index];
+        return Column(
+          children: [
+            // Premium Search Bar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.shade100.withAlpha(80),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search roles, skills, or descriptions...',
+                    hintStyle: GoogleFonts.poppins(
+                      color: Colors.grey.shade400,
+                      fontSize: 14,
+                    ),
+                    prefixIcon: Icon(Icons.search, color: Colors.blue.shade600),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 20),
+                            onPressed: () {
+                              setState(() {
+                                _searchController.clear();
+                                _searchQuery = '';
+                              });
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 15,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            
+            // Results Counter
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    '${filteredJobs.length} Results',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.blue.shade800,
+                    ),
+                  ),
+                  if (_searchQuery.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Filtering for "$_searchQuery"',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.blue.shade600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            Expanded(
+              child: filteredJobs.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.search_off, size: 64, color: Colors.grey.shade300),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No matches found for "$_searchQuery"',
+                            style: GoogleFonts.poppins(color: Colors.grey.shade500),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: filteredJobs.length,
+                      itemBuilder: (context, index) {
+                        final job = filteredJobs[index];
             final matchingSkills = _getMatchingSkills(job);
             final missingSkills = _getMissingSkills(job);
 
@@ -333,7 +442,10 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
                 ),
               ),
             );
-          },
+                      },
+                    ),
+            ),
+          ],
         );
       },
     );
