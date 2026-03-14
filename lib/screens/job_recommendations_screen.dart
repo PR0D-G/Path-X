@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
-import '../models/job_model.dart';
-import '../providers/auth_provider.dart';
 import '../services/job_service.dart';
+import '../services/gemini_service.dart';
+import '../providers/auth_provider.dart';
+import '../models/job_model.dart';
 
 class JobRecommendationsScreen extends StatefulWidget {
   const JobRecommendationsScreen({
@@ -565,8 +566,53 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
                       children: [
                         _buildLegendItem(const Color(0xFF1E56A0), "You"),
                         const SizedBox(width: 24),
-                        _buildLegendItem(Colors.green, "Job Fit"),
+                    _buildLegendItem(Colors.green, "Job Fit"),
                       ],
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Gemini AI Insights
+                    _buildSectionHeaderWithIcon(Icons.auto_awesome, "Gemini AI Insights"),
+                    const SizedBox(height: 12),
+                    FutureBuilder<String>(
+                        future: GeminiService.getRecommendationInsights(
+                        roleTitle: job.roleTitle,
+                        userScores: Provider.of<AppAuthProvider>(context, listen: false).userProfile?.assessmentResults ?? {},
+                      ),
+                      builder: (context, snapshot) {
+                        return Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.blue.shade50, Colors.white],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.blue.withOpacity(0.1)),
+                          ),
+                          child: snapshot.connectionState == ConnectionState.waiting
+                              ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                              : Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(Icons.psychology, color: Color(0xFF1E56A0), size: 28),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Text(
+                                        snapshot.data ?? "Matches your unique profile and career goals.",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: Colors.blue.shade900,
+                                          fontStyle: FontStyle.italic,
+                                          height: 1.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 32),
 

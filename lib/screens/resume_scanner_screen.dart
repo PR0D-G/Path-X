@@ -5,6 +5,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'dart:typed_data';
 import '../models/job_model.dart';
 import '../services/job_service.dart';
+import '../services/gemini_service.dart';
 
 class ResumeScannerScreen extends StatefulWidget {
   const ResumeScannerScreen({super.key});
@@ -51,7 +52,7 @@ class _ResumeScannerScreenState extends State<ResumeScannerScreen> {
   }
 
   void _analyzeResume() async {
-    debugPrint('UI_DEBUG: Starting Resume Analysis');
+    debugPrint('UI_DEBUG: Starting Gemini Resume Analysis');
     if (_resumeController.text.isEmpty || _targetJob == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please provide your resume and select a target job')),
@@ -61,93 +62,54 @@ class _ResumeScannerScreenState extends State<ResumeScannerScreen> {
 
     setState(() => _isAnalyzing = true);
 
-    // Simulate AI analysis delay
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final results = await GeminiService.analyzeResume(
+        resumeText: _resumeController.text,
+        targetRole: _targetJob!.roleTitle,
+        requiredSkills: _targetJob!.coreSkills,
+      );
 
+      setState(() {
+        _isAnalyzing = false;
+        _analysisResults = results;
+      });
+      debugPrint('UI_DEBUG: Gemini Analysis Complete');
+    } catch (e) {
+      debugPrint('UI_DEBUG: Gemini Analysis Error: $e');
+      setState(() => _isAnalyzing = false);
+      
+      // Fallback to basic matching if Gemini fails/No API Key
+      _fallbackAnalysis();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().contains('GEMINI_API_KEY') 
+            ? 'Gemini API Key missing. Using basic analysis.' 
+            : 'AI Analysis failed. Using basic matching.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+  void _fallbackAnalysis() {
     final resumeText = _resumeController.text.toLowerCase();
     final jobSkills = _targetJob!.coreSkills;
     final skillWeights = _targetJob!.skillImportances;
-    
-    debugPrint('UI_DEBUG: Matching against Job: ${_targetJob!.roleTitle}');
-    debugPrint('UI_DEBUG: Required Skills: $jobSkills');
     
     List<String> foundSkills = [];
     List<String> missingSkills = [];
     double matchedWeightSum = 0;
     double totalWeightSum = 0;
 
-    if (jobSkills.isEmpty) {
-      debugPrint('UI_DEBUG: WARNING - targetJob has 0 skills in database');
-      setState(() {
-        _isAnalyzing = false;
-        _analysisResults = {
-          'matchScore': 0,
-          'foundSkills': [],
-          'missingSkills': [],
-          'suggestions': ['We don\'t have skill data for this specific role yet. Please try another role.'],
-        };
-      });
-      return;
-    }
-
-    // Synonym map for common industry terms
-    final Map<String, List<String>> synonyms = {
-      'lesson planning': ['lesson plans', 'curriculum', 'teaching across subject areas'],
-      'classroom management': ['disciplined', 'productive environment', 'classroom of', 'managing students'],
-      'communication': ['interpersonal', 'presentation', 'explaining', 'notes', 'summaries'],
-      'assessment': ['grading', 'evaluation', 'feedback', 'monitoring'],
-      'technology': ['digital', 'software', 'pos', 'processing'],
-    };
-
     for (var skill in jobSkills) {
       final skillLower = skill.toLowerCase().trim();
       final weight = (skillWeights[skill] ?? 3).toDouble();
       totalWeightSum += weight;
 
-      bool isMatch = false;
-
-      // Tier 1: Exact Match
       if (resumeText.contains(RegExp('\\b${RegExp.escape(skillLower)}\\b'))) {
-        isMatch = true;
-      } 
-      
-      // Tier 2: Synonym/Semantic Match
-      if (!isMatch) {
-        for (var entry in synonyms.entries) {
-          if (skillLower.contains(entry.key) || entry.key.contains(skillLower)) {
-            if (entry.value.any((syn) => resumeText.contains(syn.toLowerCase()))) {
-              isMatch = true;
-              debugPrint('UI_DEBUG: Synonym Match! $skill matched via known teaching term');
-              break;
-            }
-          }
-        }
-      }
-
-      // Tier 3: Keyword Threshold Matching
-      if (!isMatch && skillLower.contains(' ')) {
-        final tokens = skillLower.split(RegExp(r'[\s/&,]+')).where((t) => t.length > 2).toList();
-        if (tokens.isNotEmpty) {
-          int matchCount = 0;
-          for (var token in tokens) {
-            final tokenClean = token.toLowerCase();
-            final hasToken = resumeText.contains(RegExp('\\b${RegExp.escape(tokenClean)}\\b'));
-            if (hasToken) {
-              matchCount++;
-              debugPrint('UI_DEBUG:   - Keyword Match: "$token"');
-            }
-          }
-          final matchRatio = matchCount / tokens.length;
-          if (matchRatio >= 0.5) {
-            isMatch = true;
-          }
-        }
-      }
-
-      if (isMatch) {
         foundSkills.add(skill);
         matchedWeightSum += weight;
-        debugPrint('UI_DEBUG: MATCH! $skill (Weight: $weight)');
       } else {
         missingSkills.add(skill);
       }
@@ -156,31 +118,18 @@ class _ResumeScannerScreenState extends State<ResumeScannerScreen> {
     final score = totalWeightSum > 0 
         ? (matchedWeightSum / totalWeightSum * 100).toInt() 
         : 0;
-    
-    debugPrint('UI_DEBUG: Raw Weights: $matchedWeightSum / $totalWeightSum');
-    debugPrint('UI_DEBUG: Calculated Score: $score%');
-
-    // Logic for "Suggest what to add"
-    List<String> suggestions = [];
-    if (missingSkills.isNotEmpty) {
-      suggestions.add('Add these missing technical skills: ${missingSkills.take(3).join(", ")}');
-    }
-    
-    if (!resumeText.contains('project') && !resumeText.contains('experience')) {
-      suggestions.add('Consider adding a "Projects" or "Work Experience" section to showcase practical application.');
-    }
-
-    if (!resumeText.contains('achieved') && !resumeText.contains('increased') && !resumeText.contains('managed')) {
-      suggestions.add('Use more action verbs like "Achieved", "Increased", or "Led" to describe your impact.');
-    }
 
     setState(() {
-      _isAnalyzing = false;
       _analysisResults = {
         'matchScore': score,
         'foundSkills': foundSkills,
         'missingSkills': missingSkills,
-        'suggestions': suggestions,
+        'suggestions': [
+          'Add missing technical skills.',
+          'Use more action verbs.',
+          'Include a projects section.'
+        ],
+        'strengths': ['Matching job Title', 'Relevant experience']
       };
     });
   }
@@ -444,8 +393,39 @@ class _ResumeScannerScreenState extends State<ResumeScannerScreen> {
   }
 
   Widget _buildResultsSection() {
-    final score = _analysisResults!['matchScore'] as int;
-    final suggestions = _analysisResults!['suggestions'] as List<String>;
+    final isValid = _analysisResults!['isValid'] ?? true;
+    
+    if (!isValid) {
+      final errorMsg = _analysisResults!['errorMsg'] ?? 'Please provide a valid resume';
+      return Container(
+        padding: const EdgeInsets.all(24),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.red.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.red.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+            const SizedBox(height: 16),
+            Text(
+              'Invalid Resume Data',
+              style: GoogleFonts.outfit(color: Colors.red, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              errorMsg,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(color: premiumDarkBlue.withOpacity(0.7), fontSize: 14),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final score = (_analysisResults!['matchScore'] as num).toInt();
+    final suggestions = List<String>.from(_analysisResults!['suggestions'] ?? []);
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -517,9 +497,9 @@ class _ResumeScannerScreenState extends State<ResumeScannerScreen> {
           ),
           child: Column(
             children: [
-              _buildSkillStatusRow('Matching Skills', _analysisResults!['foundSkills'], Colors.greenAccent),
-              const Divider(color: Colors.white10, height: 24),
-              _buildSkillStatusRow('Critical Gaps', _analysisResults!['missingSkills'], Colors.redAccent),
+              _buildSkillStatusRow('Matching Skills', _analysisResults!['foundSkills'], const Color(0xFF15803D)), // Darker Green
+              const Divider(color: Colors.black12, height: 24),
+              _buildSkillStatusRow('Critical Gaps', _analysisResults!['missingSkills'], const Color(0xFFB91C1C)), // Darker Red
             ],
           ),
         ),
@@ -546,24 +526,31 @@ class _ResumeScannerScreenState extends State<ResumeScannerScreen> {
           children: [
             Text(title, style: GoogleFonts.outfit(color: color, fontSize: 14, fontWeight: FontWeight.bold)),
             const Spacer(),
-            Text('${skillList.length}', style: TextStyle(color: color.withOpacity(0.7))),
+            Text('${skillList.length}', style: GoogleFonts.poppins(color: color.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.w600)),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (skillList.isEmpty)
-          Text('None detected yet.', style: GoogleFonts.poppins(color: Colors.white30, fontSize: 12))
+          Text('None detected yet.', style: GoogleFonts.poppins(color: premiumDarkBlue.withOpacity(0.3), fontSize: 12))
         else
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: skillList.map((s) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: color.withOpacity(0.2)),
+                border: Border.all(color: color.withOpacity(0.15)),
               ),
-              child: Text(s, style: GoogleFonts.poppins(color: Colors.white.withOpacity(0.8), fontSize: 11)),
+              child: Text(
+                s, 
+                style: GoogleFonts.poppins(
+                  color: color.withOpacity(0.9), 
+                  fontSize: 11, 
+                  fontWeight: FontWeight.w600
+                )
+              ),
             )).toList(),
           ),
       ],
@@ -571,23 +558,46 @@ class _ResumeScannerScreenState extends State<ResumeScannerScreen> {
   }
 
   Widget _buildSuggestionItem(String suggestion) {
+    // Detect if this is a critical warning (like "Not a resume" or "Wrong document")
+    final isWarning = suggestion.toLowerCase().contains('not a resume') || 
+                      suggestion.toLowerCase().contains('job description') ||
+                      suggestion.startsWith('Note:');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isWarning ? const Color(0xFFFFF7E6) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: premiumDarkBlue.withOpacity(0.05)),
+        border: Border.all(
+          color: isWarning ? Colors.orange.withOpacity(0.3) : premiumDarkBlue.withOpacity(0.05),
+          width: isWarning ? 1.5 : 1,
+        ),
+        boxShadow: isWarning ? [
+          BoxShadow(
+            color: Colors.orange.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ] : null,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.auto_awesome, color: premiumGold, size: 20),
+          Icon(
+            isWarning ? Icons.warning_amber_rounded : Icons.auto_awesome, 
+            color: isWarning ? Colors.orange : premiumGold, 
+            size: 20
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               suggestion,
-              style: GoogleFonts.poppins(color: premiumDarkBlue.withOpacity(0.8), fontSize: 14),
+              style: GoogleFonts.poppins(
+                color: isWarning ? const Color(0xFF855D10) : premiumDarkBlue.withOpacity(0.8), 
+                fontSize: 14,
+                fontWeight: isWarning ? FontWeight.w500 : FontWeight.normal,
+              ),
             ),
           ),
         ],
