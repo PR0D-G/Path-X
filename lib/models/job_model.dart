@@ -12,6 +12,9 @@ class LearningResource {
   final double rating;
   final bool free;
   final bool certificate;
+  final String price;
+  final String imageUrl;
+  final String level;
 
   // For backward compatibility
   List<String> get courses => [];
@@ -27,6 +30,9 @@ class LearningResource {
     required this.rating,
     required this.free,
     required this.certificate,
+    this.price = 'Free',
+    this.imageUrl = '',
+    this.level = 'Beginner',
   });
 
   factory LearningResource.fromJson(Map<String, dynamic> json) {
@@ -41,6 +47,9 @@ class LearningResource {
       rating: double.tryParse(json['rating']?.toString() ?? '0') ?? 0.0,
       free: json['free'] == true,
       certificate: json['certificate'] == true,
+      price: json['price']?.toString() ?? (json['free'] == true ? 'Free' : 'Paid'),
+      imageUrl: json['image_url']?.toString() ?? '',
+      level: json['level']?.toString() ?? 'Beginner',
     );
   }
 }

@@ -5,6 +5,8 @@ import '../providers/auth_provider.dart';
 import 'job_recommendations_screen.dart';
 import 'learning_path_screen.dart';
 import 'profile_screen.dart';
+import 'resume_scanner_screen.dart';
+import 'resume_builder_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -105,7 +107,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             GoogleFonts.poppins(fontWeight: FontWeight.w500)),
                     onTap: () {
                       Navigator.pop(context);
-                      // Navigate to scan resume
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const ResumeScannerScreen()),
+                      );
                     },
                   ),
                   ListTile(
@@ -116,7 +122,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             GoogleFonts.poppins(fontWeight: FontWeight.w500)),
                     onTap: () {
                       Navigator.pop(context);
-                      // Navigate to build resume
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const ResumeBuilderScreen()),
+                      );
                     },
                   ),
                   ListTile(

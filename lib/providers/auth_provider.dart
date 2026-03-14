@@ -80,11 +80,9 @@ class AppAuthProvider with ChangeNotifier {
           uid: uid,
           email: _user?.email,
           displayName: _user?.userMetadata?['display_name'] ??
-              _user?.userMetadata?['full_name'] ??
-              _user?.email?.split('@').first ??
-              'User',
+              _user?.userMetadata?['full_name'] ?? '',
           photoURL: _user?.userMetadata?['avatar_url'],
-          skills: ['Research'],
+          skills: [],
         );
         await _saveUserProfile();
       }
@@ -95,8 +93,8 @@ class AppAuthProvider with ChangeNotifier {
       _userProfile = UserProfile(
         uid: uid,
         email: _user?.email,
-        displayName: _user?.userMetadata?['display_name'] ?? 'User',
-        skills: ['Research'],
+        displayName: _user?.userMetadata?['display_name'] ?? '',
+        skills: [],
       );
     } finally {
       notifyListeners();
@@ -183,10 +181,9 @@ class AppAuthProvider with ChangeNotifier {
           uid: _user!.id,
           email: _user!.email,
           displayName: displayName ??
-              _user?.userMetadata?['display_name'] ??
-              _user!.email?.split('@').first,
+              _user?.userMetadata?['display_name'] ?? '',
           photoURL: _user?.userMetadata?['avatar_url'],
-          skills: ['Research'],
+          skills: [],
           hasCompletedQuestionnaire: false,
         );
 

@@ -43,6 +43,16 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   late final TextEditingController _skillsController;
   late final TextEditingController _interestsController;
 
+  // Skill Suggestions
+  List<String> _allSkillSuggestions = [];
+  List<String> _filteredSkillSuggestions = [];
+  bool _showSkillSuggestions = false;
+
+  // Career Suggestions
+  List<String> _allCareerSuggestions = [];
+  List<String> _filteredCareerSuggestions = [];
+  bool _showCareerSuggestions = false;
+
   // Track if we're showing the info form or questions
   bool _showInfoForm = true;
 
@@ -68,13 +78,146 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
     _interestsController = TextEditingController(
         text: widget.interests ?? profile?.interests ?? '');
 
-    // Auto-skip logic: If name is already provided, skip the info form and load questions
+    // Auto-skip logic: If ALL content is already filled, skip the info form
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_nameController.text.isNotEmpty) {
-        debugPrint(
-            'DEBUG: Auto-skipping info form as name exists: ${_nameController.text}');
+      _fetchSkillSuggestions();
+      _fetchCareerSuggestions();
+      
+      bool isAllFilled = _nameController.text.trim().isNotEmpty &&
+          _educationController.text.trim().isNotEmpty &&
+          _skillsController.text.trim().isNotEmpty &&
+          _interestsController.text.trim().isNotEmpty;
+
+      if (isAllFilled) {
+        debugPrint('DEBUG: Auto-skipping info form as all content is filled.');
         _loadQuestions();
       }
+    });
+  }
+
+  Future<void> _fetchCareerSuggestions() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('careers')
+          .select('title');
+      
+      final List<String> careers = (response as List)
+          .map((s) => s['title'].toString())
+          .toSet()
+          .toList();
+      
+      careers.sort();
+
+      if (mounted) {
+        setState(() {
+          _allCareerSuggestions = careers;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching career suggestions: $e');
+    }
+  }
+
+  void _onInterestChanged(String value) {
+    if (value.isEmpty) {
+      setState(() {
+        _filteredCareerSuggestions = [];
+        _showCareerSuggestions = false;
+      });
+      return;
+    }
+
+    final suggestions = _allCareerSuggestions
+        .where((career) => career.toLowerCase().contains(value.toLowerCase()))
+        .take(10)
+        .toList();
+
+    setState(() {
+      _filteredCareerSuggestions = suggestions;
+      _showCareerSuggestions = suggestions.isNotEmpty;
+    });
+  }
+
+  void _selectCareer(String career) {
+    _interestsController.text = career;
+    setState(() {
+      _showCareerSuggestions = false;
+    });
+  }
+
+  Future<void> _fetchSkillSuggestions() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('career_skills')
+          .select('skill_name');
+      
+      final List<String> skills = (response as List)
+          .map((s) => s['skill_name'].toString())
+          .toSet() // Removes duplicates
+          .toList();
+      
+      skills.sort();
+
+      if (mounted) {
+        setState(() {
+          _allSkillSuggestions = skills;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching skill suggestions: $e');
+    }
+  }
+
+  void _onSkillChanged(String value) {
+    if (value.isEmpty) {
+      setState(() {
+        _filteredSkillSuggestions = [];
+        _showSkillSuggestions = false;
+      });
+      return;
+    }
+
+    final currentSkills = _skillsController.text
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .toList();
+    final lastPart = currentSkills.last;
+
+    if (lastPart.isEmpty) {
+      setState(() {
+        _showSkillSuggestions = false;
+      });
+      return;
+    }
+
+    final suggestions = _allSkillSuggestions
+        .where((skill) =>
+            skill.toLowerCase().contains(lastPart) &&
+            !currentSkills.contains(skill.toLowerCase()))
+        .take(5)
+        .toList();
+
+    setState(() {
+      _filteredSkillSuggestions = suggestions;
+      _showSkillSuggestions = suggestions.isNotEmpty;
+    });
+  }
+
+  void _selectSkill(String skill) {
+    final parts = _skillsController.text.split(',');
+    if (parts.isNotEmpty) {
+      parts.removeLast();
+    }
+    parts.add(skill);
+    
+    final newText = parts.join(', ') + ', ';
+    _skillsController.text = newText;
+    _skillsController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _skillsController.text.length),
+    );
+
+    setState(() {
+      _showSkillSuggestions = false;
     });
   }
 
@@ -510,7 +653,7 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
   }
 
   Widget _buildInfoForm() {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -598,29 +741,98 @@ class _QuestionnaireScreenState extends State<QuestionnaireScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Skills Field
-          TextFormField(
-            controller: _skillsController,
-            decoration: InputDecoration(
-              labelText: 'Skills (comma separated)',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+          // Skills Field with Suggestions
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextFormField(
+                controller: _skillsController,
+                onChanged: _onSkillChanged,
+                decoration: InputDecoration(
+                  labelText: 'Skills (comma separated)',
+                  hintText: 'e.g. Python, SQL, Project Management',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                maxLines: 2,
               ),
-            ),
-            maxLines: 2,
+              if (_showSkillSuggestions)
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  margin: const EdgeInsets.only(top: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ListView(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    children: _filteredSkillSuggestions.map((skill) {
+                      return ListTile(
+                        dense: true,
+                        title: Text(skill, style: GoogleFonts.poppins(fontSize: 14)),
+                        onTap: () => _selectSkill(skill),
+                      );
+                    }).toList(),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 16),
 
-          // Interests Field
-          TextFormField(
-            controller: _interestsController,
-            decoration: InputDecoration(
-              labelText: 'Career Interests',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+          // Career Interests Field with Suggestions
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextFormField(
+                controller: _interestsController,
+                onChanged: _onInterestChanged,
+                decoration: InputDecoration(
+                  labelText: 'Career Interests',
+                  hintText: 'e.g. Software Developer, Data Scientist',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
-            ),
-            maxLines: 2,
+              if (_showCareerSuggestions)
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  margin: const EdgeInsets.only(top: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ListView(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    children: _filteredCareerSuggestions.map((career) {
+                      return ListTile(
+                        dense: true,
+                        title: Text(career, style: GoogleFonts.poppins(fontSize: 14)),
+                        onTap: () => _selectCareer(career),
+                      );
+                    }).toList(),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 32),
 

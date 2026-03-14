@@ -366,9 +366,9 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
                                                       : Colors.white,
                                                     fontSize: 15,
                                                   ),
-                                                  children: [
-                                                    TextSpan(text: '${job.matchPercentage.toStringAsFixed(0)}'),
-                                                    const TextSpan(text: '%', style: TextStyle(fontSize: 11)),
+                                                    children: [
+                                                      TextSpan(text: job.matchPercentage.toStringAsFixed(0)),
+                                                      const TextSpan(text: '%', style: TextStyle(fontSize: 11)),
                                                     const TextSpan(text: ' Match', style: TextStyle(fontSize: 11, fontWeight: FontWeight.normal)),
                                                   ],
                                                 ),
@@ -507,7 +507,7 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
     Job job,
     List<String> matchingSkills,
     List<String> missingSkills,
-    Map<String, List<String>> details,
+    Map<String, dynamic> details,
   ) {
     showModalBottomSheet(
       context: context,
@@ -607,31 +607,9 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
                     ],
 
                     // Salary & Outlook
-                    _buildSectionHeaderWithIcon(Icons.groups_outlined, "Salary & Outlook"),
+                    _buildSectionHeaderWithIcon(Icons.insights, "Market Demand & Salary Trends"),
                     const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade100)),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              _buildOutlookItem("Entry", "₹${(job.salaryMin ~/ 100000)}L - ₹${(job.salaryMin ~/ 80000)}L"),
-                              const Expanded(child: SizedBox()),
-                              _buildOutlookItem("Mid-Level", "₹${(job.salaryMin ~/ 70000)}L - ₹${(job.salaryMax ~/ 100000)}L"),
-                            ],
-                          ),
-                          const Divider(height: 32),
-                          Row(
-                            children: [
-                              _buildOutlookItem("Senior", "₹${(job.salaryMax ~/ 100000)}L+"),
-                              const Expanded(child: SizedBox()),
-                              Expanded(flex: 2, child: Text(job.description, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade600), maxLines: 2)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildMarketTrendChart(job, List<Map<String, dynamic>>.from(details['trends'] ?? [])),
                     const SizedBox(height: 32),
 
                     // Who Hires
@@ -769,17 +747,6 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
     );
   }
 
-  Widget _buildOutlookItem(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
-        const SizedBox(height: 2),
-        Text(value, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
-      ],
-    );
-  }
-
   Widget _buildDetailRowInline(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -792,6 +759,315 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildMarketTrendChart(Job job, List<Map<String, dynamic>> dbTrends) {
+    debugPrint('UI_DEBUG: Building MarketTrendChart for ${job.roleTitle}. dbTrends count: ${dbTrends.length}');
+    if (dbTrends.isEmpty) {
+      return Container(
+        height: 250,
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.blue.withAlpha(20)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blue.shade900.withAlpha(10),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 40,
+              height: 40,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              "Fetching market trends...",
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: Colors.blue.shade900,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Use data strictly from DB
+    double salaryFresher = 0;
+    double salaryMid = 0;
+    double salarySenior = 0;
+    
+    double demandFresher = 0;
+    double demandMid = 0;
+    double demandSenior = 0;
+
+    // Sort by salary to ensure order: Fresher -> Mid -> Senior
+    dbTrends.sort((a, b) => (a['salary'] as num).compareTo(b['salary'] as num));
+    
+    for (var trend in dbTrends) {
+      final level = trend['level']?.toString().toLowerCase() ?? '';
+      final salary = (trend['salary'] as num).toDouble() / 100000;
+      final demand = (trend['demand_score'] as num?)?.toDouble() ?? 50.0;
+      
+      if (level.contains('fresh')) {
+        salaryFresher = salary;
+        demandFresher = demand;
+      } else if (level.contains('senior')) {
+        salarySenior = salary;
+        demandSenior = demand;
+      } else {
+        salaryMid = salary;
+        demandMid = demand;
+      }
+    }
+    
+    // If we only have 2 points, interpolate the middle
+    if (dbTrends.length == 2) {
+      if (salaryMid == 0) salaryMid = (salaryFresher + salarySenior) / 2;
+      if (demandMid == 0) demandMid = (demandFresher + demandSenior) / 2;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.blue.withAlpha(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.shade900.withAlpha(10),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Trend Analysis",
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF1E3A8A),
+                    ),
+                  ),
+                  Text(
+                    "Career Growth (India 2024)",
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey.shade500,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.trending_up, color: Colors.blue.shade700, size: 20),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          SizedBox(
+            height: 220,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // Y-Axis Demand
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    for (int val in [100, 80, 60, 40, 20, 0])
+                      SizedBox(
+                        width: 25,
+                        child: Text(
+                          val.toString(), 
+                          textAlign: TextAlign.right,
+                          style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey.shade400, fontWeight: FontWeight.w500)
+                        )
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                // Chart Area
+                Expanded(
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // Guidelines
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: List.generate(6, (index) => Container(
+                          height: 1,
+                          color: index == 5 ? Colors.grey.shade300 : Colors.grey.shade100,
+                        )),
+                      ),
+                      // Bars
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            _buildTrendBar("Fresher", "0-2 Yrs", salaryFresher, 60),
+                            _buildTrendBar("Professional", "2-5 Yrs", salaryMid, 60),
+                            _buildTrendBar("Senior", "5+ Yrs", salarySenior, 60),
+                          ],
+                        ),
+                      ),
+                      // Line
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: TrendLinePainter(
+                            points: [demandFresher, demandMid, demandSenior],
+                            maxVal: 100,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Y-Axis Salary
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    for (int val in [60, 50, 40, 30, 20, 10, 0])
+                      SizedBox(
+                        width: 30,
+                        child: Text(
+                          "₹${val}L", 
+                          style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey.shade400, fontWeight: FontWeight.w500)
+                        )
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Legend
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildSimpleLegendItem(const Color(0xFF8B5CF6), "Avg Annual Salary"),
+              const SizedBox(width: 20),
+              _buildSimpleLegendItem(const Color(0xFF3B82F6), "Market Demand"),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Insight
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade50.withAlpha(100), Colors.white],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.blue.shade100),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.auto_awesome, size: 18, color: Colors.blue.shade600),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    "Senior positions for this role currently show the highest demand (${demandSenior.toInt()} pts) and earning potential (₹${salarySenior.toInt()}L+ avg).",
+                    style: GoogleFonts.poppins(fontSize: 11, color: Colors.blue.shade900, fontWeight: FontWeight.w500, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrendBar(String label, String subLabel, double value, double maxValue) {
+    double heightFactor = (value / maxValue).clamp(0.1, 1.0);
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Container(
+          width: 32,
+          height: 160 * heightFactor,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFC4B5FD), Color(0xFF8B5CF6)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF8B5CF6).withAlpha(40),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.topCenter,
+            children: [
+               Positioned(
+                 top: 6,
+                 child: Text(
+                   "₹${value.toInt()}L",
+                   style: GoogleFonts.poppins(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                 ),
+               ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(label, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF1E3A8A))),
+        Text(subLabel, style: GoogleFonts.poppins(fontSize: 9, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+
+  Widget _buildSimpleLegendItem(Color color, String label) {
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(label, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+      ],
     );
   }
 }
@@ -818,7 +1094,11 @@ class RadarChartPainter extends CustomPainter {
         for (var j = 0; j < sides; j++) {
             final x = center.dx + levelRadius * math.cos(j * angle - math.pi / 2);
             final y = center.dy + levelRadius * math.sin(j * angle - math.pi / 2);
-            if (j == 0) path.moveTo(x, y); else path.lineTo(x, y);
+            if (j == 0) {
+              path.moveTo(x, y);
+            } else {
+              path.lineTo(x, y);
+            }
         }
         path.close();
         canvas.drawPath(path, gridPaint);
@@ -852,7 +1132,11 @@ class RadarChartPainter extends CustomPainter {
         final r = radius * scores[i].clamp(0.0, 1.0);
         final x = center.dx + r * math.cos(i * angle - math.pi / 2);
         final y = center.dy + r * math.sin(i * angle - math.pi / 2);
-        if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+        if (i == 0) {
+          path.moveTo(x, y);
+        } else {
+          path.lineTo(x, y);
+        }
     }
     path.close();
     canvas.drawPath(path, Paint()..color = fillColor..style = PaintingStyle.fill);
@@ -870,4 +1154,69 @@ class RadarChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class TrendLinePainter extends CustomPainter {
+  final List<double> points;
+  final double maxVal;
+
+  TrendLinePainter({required this.points, required this.maxVal});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+
+    final paint = Paint()
+      ..color = const Color(0xFF3B82F6)
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final dotPaint = Paint()
+      ..color = const Color(0xFF3B82F6)
+      ..style = PaintingStyle.fill;
+
+    const double xPadding = 24 + 16; // Container padding + half bar width
+    final double totalWidth = size.width - (xPadding * 2);
+
+    final List<Offset> offsetPoints = [];
+    for (int i = 0; i < points.length; i++) {
+      double x = xPadding + (i * totalWidth / (points.length - 1));
+      double y = size.height - (points[i] / maxVal) * size.height;
+      offsetPoints.add(Offset(x, y));
+    }
+
+    // Draw lines
+    final path = Path();
+    path.moveTo(offsetPoints[0].dx, offsetPoints[0].dy);
+    for (int i = 1; i < offsetPoints.length; i++) {
+      path.lineTo(offsetPoints[i].dx, offsetPoints[i].dy);
+    }
+    canvas.drawPath(path, paint);
+
+    // Dots and Demand Labels
+    for (int i = 0; i < offsetPoints.length; i++) {
+        var point = offsetPoints[i];
+        
+        // Shadow for dot
+        canvas.drawCircle(point, 8, Paint()..color = const Color(0xFF3B82F6).withAlpha(40)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+        
+        canvas.drawCircle(point, 6, dotPaint);
+        canvas.drawCircle(point, 3, Paint()..color = Colors.white);
+
+        // Demand Value Label
+        final textPainter = TextPainter(
+          text: TextSpan(
+            text: points[i].toInt().toString(),
+            style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFF2563EB)),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        
+        textPainter.paint(canvas, Offset(point.dx - (textPainter.width / 2), point.dy - 25));
+    }
+  }
+
+  @override
+  bool shouldRepaint(TrendLinePainter oldDelegate) => oldDelegate.points != points;
 }

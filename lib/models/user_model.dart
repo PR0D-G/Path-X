@@ -63,18 +63,18 @@ class UserProfile {
       bio: map['bio'],
       location: map['location'],
       skills: map['skills'] != null ? List<String>.from(map['skills']) : null,
-      educationLevel: map['educationLevel'],
-      careerGoal: map['selected_career'],
+      educationLevel: map['education_level'] ?? map['educationLevel'],
+      careerGoal: map['selected_career'] ?? map['careerGoal'],
       assessmentResults: map['assessmentResults'] != null
           ? Map<String, dynamic>.from(map['assessmentResults'])
           : null,
-      hasCompletedQuestionnaire: map['hasCompletedQuestionnaire'] ?? false,
+      hasCompletedQuestionnaire: map['has_completed_questionnaire'] ?? map['hasCompletedQuestionnaire'] ?? false,
       interests: map['interests'],
       createdAt: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
-      updatedAt: map['updatedAt'] != null
-          ? DateTime.tryParse(map['updatedAt'].toString()) ?? DateTime.now()
+      updatedAt: (map['updated_at'] ?? map['updatedAt']) != null
+          ? DateTime.tryParse((map['updated_at'] ?? map['updatedAt']).toString()) ?? DateTime.now()
           : DateTime.now(),
     );
   }
