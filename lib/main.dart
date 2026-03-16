@@ -25,10 +25,23 @@ void main() async {
   const String supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
   // Initialize Supabase
-  await Supabase.initialize(
-    url: supabaseUrl.isNotEmpty ? supabaseUrl : (dotenv.env['SUPABASE_URL'] ?? ''),
-    anonKey: supabaseAnonKey.isNotEmpty ? supabaseAnonKey : (dotenv.env['SUPABASE_ANON_KEY'] ?? ''),
-  );
+  try {
+    final String url = supabaseUrl.isNotEmpty ? supabaseUrl : (dotenv.env['SUPABASE_URL'] ?? '');
+    final String anonKey = supabaseAnonKey.isNotEmpty ? supabaseAnonKey : (dotenv.env['SUPABASE_ANON_KEY'] ?? '');
+
+    if (url.isEmpty || anonKey.isEmpty) {
+      throw Exception('Supabase URL or Anon Key is missing. Check --dart-define or .env');
+    }
+
+    await Supabase.initialize(
+      url: url,
+      anonKey: anonKey,
+    );
+  } catch (e) {
+    debugPrint("Supabase Initialization Error: $e");
+    // We'll let the app continue to show an error message in the UI if possible,
+    // or at least prevent a complete silent white screen crash here.
+  }
 
   runApp(const MyApp());
 }
