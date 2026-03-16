@@ -253,16 +253,57 @@ class _JobRecommendationsScreenState extends State<JobRecommendationsScreen> {
             Expanded(
               child: filteredJobs.isEmpty
                   ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.search_off, size: 64, color: Colors.grey.shade300),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No matches found for "$_searchQuery"',
-                            style: GoogleFonts.poppins(color: Colors.grey.shade500),
-                          ),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.all(32.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.search_off, size: 64, color: Colors.blue.shade300),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              'Not finding what you want?',
+                              style: GoogleFonts.outfit(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF1E293B),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'We are currently limited to 100 job roles in our database. If your target role isn\'t listed, you can request it!',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.poppins(
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                                height: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                // Close current context or navigate via drawer logic. 
+                                // Since we are in a tab, we use index selection or push to Support.
+                                Navigator.of(context).pushNamed('/support-request', arguments: {'isSupportOnly': false});
+                              },
+                              icon: const Icon(Icons.help_outline, color: Colors.white),
+                              label: const Text('RAISE A REQUEST'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF004B8D),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 4,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     )
                   : LayoutBuilder(

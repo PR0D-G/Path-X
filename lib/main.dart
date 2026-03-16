@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'screens/user_check_screen.dart';
 import 'screens/questionnaire_screen.dart';
 import 'screens/learning_path_screen.dart';
+import 'screens/support_request_screen.dart';
 import 'providers/auth_provider.dart';
 
 void main() async {
@@ -57,6 +58,10 @@ class MyApp extends StatelessWidget {
           '/home': (context) => const UserCheckScreen(),
           '/questionnaire': (context) => const QuestionnaireScreen(),
           '/learning-path': (context) => const LearningPathScreen(),
+          '/support-request': (context) {
+            final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+            return SupportRequestScreen(isSupportOnly: args?['isSupportOnly'] ?? false);
+          },
         },
         onGenerateRoute: (settings) {
           return null;

@@ -7,6 +7,9 @@ import 'learning_path_screen.dart';
 import 'profile_screen.dart';
 import 'resume_scanner_screen.dart';
 import 'resume_builder_screen.dart';
+import 'certificate_validation_screen.dart';
+import 'settings_screen.dart';
+import 'support_request_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -18,21 +21,70 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [
-    const JobRecommendationsScreen(),
-    const LearningPathScreen(),
-    const ProfileScreen(),
-  ];
+  List<Widget> _getScreens(String? careerGoal) {
+    if (careerGoal != null && careerGoal.isNotEmpty) {
+      return [
+        const LearningPathScreen(),
+        const ProfileScreen(),
+      ];
+    }
+    return [
+      const JobRecommendationsScreen(),
+      const LearningPathScreen(),
+      const ProfileScreen(),
+    ];
+  }
+
+  List<BottomNavigationBarItem> _getBottomNavItems(String? careerGoal) {
+    if (careerGoal != null && careerGoal.isNotEmpty) {
+      return const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.auto_fix_high_outlined),
+          activeIcon: Icon(Icons.auto_fix_high),
+          label: 'My Roadmap',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          activeIcon: Icon(Icons.person),
+          label: 'Profile',
+        ),
+      ];
+    }
+    return const [
+      BottomNavigationBarItem(
+        icon: Icon(Icons.work_outline),
+        activeIcon: Icon(Icons.work),
+        label: 'Jobs',
+      ),
+      BottomNavigationBarItem(
+        icon: Icon(Icons.school_outlined),
+        activeIcon: Icon(Icons.school),
+        label: 'Learn',
+      ),
+      BottomNavigationBarItem(
+        icon: Icon(Icons.person_outline),
+        activeIcon: Icon(Icons.person),
+        label: 'Profile',
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AppAuthProvider>(context);
-    final user = authProvider.user;
+    final careerGoal = authProvider.userProfile?.careerGoal;
+    final screens = _getScreens(careerGoal);
+    final navItems = _getBottomNavItems(careerGoal);
+
+    // Ensure index is within bounds after dynamic update
+    if (_selectedIndex >= screens.length) {
+      _selectedIndex = 0;
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _getAppBarTitle(_selectedIndex),
+          _getAppBarTitle(_selectedIndex, careerGoal),
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
             fontSize: 20,
@@ -99,6 +151,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                     },
                   ),
+                  if (careerGoal != null && careerGoal.isNotEmpty)
+                    ListTile(
+                      leading: Icon(Icons.school_outlined, color: Colors.grey.shade700),
+                      title: Text('My Learning Journey',
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        setState(() => _selectedIndex = 0);
+                      },
+                    ),
                   ListTile(
                     leading: Icon(Icons.document_scanner_outlined,
                         color: Colors.grey.shade700),
@@ -137,7 +199,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             GoogleFonts.poppins(fontWeight: FontWeight.w500)),
                     onTap: () {
                       Navigator.pop(context);
-                      // Navigate to verify certificates
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const CertificateValidationScreen()),
+                      );
                     },
                   ),
                   ListTile(
@@ -148,7 +214,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             GoogleFonts.poppins(fontWeight: FontWeight.w500)),
                     onTap: () {
                       Navigator.pop(context);
-                      // Navigate to settings (placeholder)
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const SettingsScreen()),
+                      );
                     },
                   ),
                   ListTile(
@@ -159,7 +229,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             GoogleFonts.poppins(fontWeight: FontWeight.w500)),
                     onTap: () {
                       Navigator.pop(context);
-                      // Navigate to support (placeholder)
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const SupportRequestScreen(isSupportOnly: true)),
+                      );
                     },
                   ),
                   ListTile(
@@ -170,7 +244,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             GoogleFonts.poppins(fontWeight: FontWeight.w500)),
                     onTap: () {
                       Navigator.pop(context);
-                      // Navigate to raise request (placeholder)
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const SupportRequestScreen(isSupportOnly: false)),
+                      );
                     },
                   ),
                 ],
@@ -192,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: IndexedStack(
         index: _selectedIndex,
-        children: _screens,
+        children: screens,
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(boxShadow: [
@@ -218,34 +296,30 @@ class _HomeScreenState extends State<HomeScreen> {
               GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500),
           type: BottomNavigationBarType.fixed,
           elevation: 0,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.work_outline),
-              activeIcon: Icon(Icons.work),
-              label: 'Jobs',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.school_outlined),
-              activeIcon: Icon(Icons.school),
-              label: 'Learn',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-          ],
+          items: navItems,
         ),
       ),
     );
   }
 
-  String _getAppBarTitle(int index) {
+  String _getAppBarTitle(int index, String? careerGoal) {
+    if (careerGoal != null && careerGoal.isNotEmpty) {
+       switch (index) {
+        case 0:
+          return 'My Roadmap';
+        case 1:
+          return 'My Profile';
+        default:
+          return 'Path-X';
+      }
+    }
     switch (index) {
       case 0:
         return 'Job Recommendations';
       case 1:
         return 'Learning Path';
+      case 2:
+        return 'My Profile';
       default:
         return 'Path-X';
     }

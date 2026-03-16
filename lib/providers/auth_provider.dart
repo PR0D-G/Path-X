@@ -121,6 +121,41 @@ class AppAuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // Select Career Goal
+  Future<void> selectCareer(String careerTitle) async {
+    if (_userProfile == null) return;
+    _userProfile = _userProfile!.copyWith(careerGoal: careerTitle);
+    await _saveUserProfile();
+    notifyListeners();
+  }
+
+  // Clear Career Goal
+  Future<void> clearCareerGoal() async {
+    if (_userProfile == null) return;
+    _userProfile = _userProfile!.copyWith(careerGoal: '');
+    await _saveUserProfile();
+    notifyListeners();
+  }
+
+  // Add skills to profile
+  Future<void> addSkills(List<String> newSkills) async {
+    if (_userProfile == null) return;
+    
+    final currentSkills = _userProfile!.skills != null 
+        ? List<String>.from(_userProfile!.skills!) 
+        : <String>[];
+        
+    for (var skill in newSkills) {
+      if (!currentSkills.contains(skill)) {
+        currentSkills.add(skill);
+      }
+    }
+    
+    _userProfile = _userProfile!.copyWith(skills: currentSkills);
+    await _saveUserProfile();
+    notifyListeners();
+  }
+
   // Dispose
   @override
   void dispose() {
@@ -287,5 +322,47 @@ class AppAuthProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  // Update Email
+  Future<void> updateEmail(String newEmail) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+      await _auth.updateEmail(newEmail);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Update Password
+  Future<void> updatePassword(String newPassword) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+      await _auth.updatePassword(newPassword);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Delete Account
+  Future<void> deleteAccount() async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+      await _auth.deleteAccount();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Verify Password
+  Future<bool> verifyPassword(String password) async {
+    if (_user?.email == null) return false;
+    return await _auth.verifyPassword(_user!.email!, password);
   }
 }

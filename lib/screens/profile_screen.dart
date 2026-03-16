@@ -1,14 +1,10 @@
-import 'dart:io'; // Required for Image.file
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 import '../providers/auth_provider.dart';
-import '../models/user_model.dart';
 import '../models/job_model.dart';
 import '../services/job_service.dart';
-import 'auth/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final Job? job;
@@ -31,11 +27,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _educationLevelController = TextEditingController();
   final _careerGoalController = TextEditingController();
 
-  bool _isEditing = false;
-  bool _isLoading = false;
+  static const Color premiumGold = Color(0xFFB8860B);
+  static const Color premiumDarkBlue = Color(0xFF1E293B);
+  static const Color premiumBlue = Color(0xFF1E56A0);
+  static const Color background = Color(0xFFF8FAFC);
+
   String? _profileImageUrl;
   List<Map<String, dynamic>> _enrolledCareers = [];
-  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -107,192 +105,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _pickImage() async {
-    try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-
-      if (image != null && mounted) {
-        setState(() {
-          _profileImageUrl = image.path;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to pick image: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-      final user = authProvider.user;
-
-      if (user != null) {
-        // Update user profile in Database
-        final updatedProfile = UserProfile(
-          uid: user.id,
-          email: _emailController.text.trim(),
-          displayName: _nameController.text.trim(),
-          photoURL: _profileImageUrl,
-          bio: _bioController.text.trim(),
-          location: _locationController.text.trim(),
-          educationLevel: _educationLevelController.text.trim(),
-          careerGoal: _careerGoalController.text.trim(),
-          skills: authProvider.userProfile?.skills ?? [],
-          hasCompletedQuestionnaire:
-              authProvider.userProfile?.hasCompletedQuestionnaire ?? false,
-          interests: authProvider.userProfile?.interests,
-          // Preserve timestamps
-          createdAt: authProvider.userProfile?.createdAt,
-          updatedAt: DateTime.now(),
-        );
-
-        // Update in Database
-        await authProvider.updateUserProfile(updatedProfile);
-
-        // Update in Auth if name changed
-        if (user.userMetadata?['display_name'] != _nameController.text.trim()) {
-          // Supabase handles name via user update
-          await Supabase.instance.client.auth.updateUser(
-            UserAttributes(data: {'display_name': _nameController.text.trim()}),
-          );
-        }
-
-        if (mounted) {
-          setState(() => _isEditing = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Profile updated successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
-    } on Exception catch (e) {
-      debugPrint('Database or Auth error saving profile: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error saving profile: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to update profile. Please try again.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _signOut() async {
-    final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-    await authProvider.signOut();
-
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-        (route) => false,
-      );
-    }
-  }
-
-  Future<void> _retakeTest() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Retake Assessment',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-        content: Text(
-            'This will clear your current assessment results and you will need to take the test again. Continue?',
-            style: GoogleFonts.poppins()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: GoogleFonts.poppins()),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('Retake',
-                style: GoogleFonts.poppins(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
-      final user = authProvider.user;
-
-      if (user != null) {
-        // 1. Update user profile flag (don't delete results yet as updating is better)
-        if (authProvider.userProfile != null) {
-          final updatedProfile = authProvider.userProfile!.copyWith(
-            hasCompletedQuestionnaire: false,
-          );
-          await authProvider.updateUserProfile(updatedProfile);
-        }
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Assessment results cleared.'),
-                backgroundColor: Colors.blue),
-          );
-
-          // 3. Navigate to questionnaire
-          Navigator.pushNamedAndRemoveUntil(
-              context, '/questionnaire', (route) => false);
-        }
-      }
-    } catch (e) {
-      debugPrint('Error clearing assessment: $e');
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to clear assessment: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -303,25 +118,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        actions: [
-          if (!_isEditing)
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: () => setState(() => _isEditing = true),
-            ),
-          if (_isEditing)
-            TextButton(
-              onPressed:
-                  _isLoading ? null : () => setState(() => _isEditing = false),
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.poppins(
-                  color: theme.colorScheme.error,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-        ],
       ),
       body: Consumer<AppAuthProvider>(
         builder: (context, authProvider, _) {
@@ -340,18 +136,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     key: _formKey,
                     child: Column(
                       children: [
-                        TextFormField(
-                          controller: _nameController,
-                          enabled: _isEditing,
+                        Text(
+                          _nameController.text,
                           textAlign: TextAlign.center,
                           style: GoogleFonts.poppins(
                               fontSize: 22, fontWeight: FontWeight.bold),
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            hintText: 'Your Name',
-                          ),
-                          validator: (value) =>
-                              value!.isEmpty ? 'Please enter your name' : null,
                         ),
                         if (authProvider.user?.email != null)
                           Text(
@@ -362,115 +151,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 24),
                         _buildSectionTitle('About Me'),
                         const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _bioController,
-                          enabled: _isEditing,
-                          maxLines: 3,
-                          decoration: _inputDecoration(
-                            hintText: 'Tell us about yourself...',
-                            isEditing: _isEditing,
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 24),
-                        _buildSectionTitle('Personal Information'),
-                        const SizedBox(height: 12),
-                        _buildInfoRow(
-                          icon: Icons.location_on_outlined,
-                          label: 'Location',
-                          controller: _locationController,
-                          isEditing: _isEditing,
-                        ),
-                        const Divider(height: 24),
-                        _buildInfoRow(
-                          icon: Icons.school_outlined,
-                          label: 'Education Level',
-                          controller: _educationLevelController,
-                          isEditing: _isEditing,
-                        ),
-                        const Divider(height: 24),
-                        _buildInfoRow(
-                          icon: Icons.flag_outlined,
-                          label: 'Career Goal',
-                          controller: _careerGoalController,
-                          isEditing: _isEditing,
+                          child: Text(
+                            _bioController.text.isEmpty ? 'No bio added yet.' : _bioController.text,
+                            style: GoogleFonts.poppins(fontSize: 14, color: premiumDarkBlue.withOpacity(0.8)),
+                          ),
                         ),
                         const SizedBox(height: 32),
-                        if (_isEditing)
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _saveProfile,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: theme.primaryColor,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                          color: Colors.white, strokeWidth: 2),
-                                    )
-                                  : Text(
-                                      'Save Changes',
-                                      style: GoogleFonts.poppins(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white),
-                                    ),
-                            ),
+                        
+                        _buildSectionTitle('Verified Skills'),
+                        const SizedBox(height: 12),
+                        _buildSkillsSection(authProvider.userProfile?.skills ?? []),
+                        
+                        const SizedBox(height: 32),
+                        _buildSectionTitle('Career Context'),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.blue.withOpacity(0.1)),
                           ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            icon:
-                                const Icon(Icons.refresh, color: Colors.white),
-                            label: Text(
-                              'Retake Assessment',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                          child: Column(
+                            children: [
+                              _buildInfoRow(
+                                icon: Icons.location_on_outlined,
+                                label: 'Location',
+                                value: _locationController.text,
                               ),
-                            ),
-                            onPressed: _isLoading ? null : _retakeTest,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange.shade700,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                              const Divider(height: 32),
+                              _buildInfoRow(
+                                icon: Icons.school_outlined,
+                                label: 'Education Level',
+                                value: _educationLevelController.text,
                               ),
-                            ),
+                              const Divider(height: 32),
+                              _buildInfoRow(
+                                icon: Icons.flag_outlined,
+                                label: 'Career Goal',
+                                value: _careerGoalController.text,
+                                isPrimary: true,
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.logout),
-                            label: Text(
-                              'Sign Out',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            onPressed: _signOut,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: theme.colorScheme.error,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              side: BorderSide(color: theme.colorScheme.error),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -507,45 +246,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Icon(Icons.person, size: 60, color: Colors.white.withOpacity(0.8));
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [premiumBlue, premiumDarkBlue],
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 60, 24, 40),
       child: Column(
         children: [
           Stack(
-            alignment: Alignment.center,
+            alignment: Alignment.bottomRight,
             children: [
-              CircleAvatar(
-                radius: 60,
-                backgroundColor: Colors.blue.shade100,
-                child: ClipOval(
-                  child: profileImage,
-                ),
-              ),
-              if (_isEditing)
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Theme.of(context).primaryColor,
-                    child: IconButton(
-                      icon: const Icon(Icons.camera_alt,
-                          color: Colors.white, size: 20),
-                      onPressed: _pickImage,
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
                     ),
+                  ],
+                ),
+                child: CircleAvatar(
+                  radius: 55,
+                  backgroundColor: Colors.white.withOpacity(0.2),
+                  child: ClipOval(
+                    child: profileImage,
                   ),
                 ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: premiumGold,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.edit, size: 16, color: Colors.white),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          // Display user's name
+          const SizedBox(height: 20),
           Text(
             userProfile?.displayName ??
                 user?.userMetadata?['display_name'] ??
                 user?.email?.split('@').first ??
                 'User',
-            style: GoogleFonts.poppins(
-              fontSize: 24,
+            style: GoogleFonts.outfit(
+              fontSize: 28,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
@@ -557,7 +310,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               user!.email!,
               style: GoogleFonts.poppins(
                 fontSize: 14,
-                color: Colors.grey.shade400,
+                color: Colors.white.withOpacity(0.7),
+                letterSpacing: 0.5,
               ),
               textAlign: TextAlign.center,
             ),
@@ -715,14 +469,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildInfoRow(
-      {required IconData icon,
-      required String label,
-      required TextEditingController controller,
-      required bool isEditing}) {
+  Widget _buildSkillsSection(List<String> skills) {
+    if (skills.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.withOpacity(0.2)),
+        ),
+        child: Text(
+          'No skills verified yet. Use the Resume Scanner to add skills!',
+          style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[600]),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: skills.map((skill) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.blue.shade600, Colors.blue.shade800],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blue.withOpacity(0.2),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.verified, size: 14, color: Colors.white),
+            const SizedBox(width: 6),
+            Text(
+              skill,
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      )).toList(),
+    );
+  }
+
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    bool isPrimary = false,
+  }) {
     return Row(
       children: [
-        Icon(icon, size: 24, color: Colors.grey.shade600),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: isPrimary ? Colors.blue.shade50 : Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, size: 22, color: isPrimary ? Colors.blue.shade700 : Colors.grey.shade600),
+        ),
         const SizedBox(width: 16),
         Expanded(
           child: Column(
@@ -730,50 +547,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               Text(label,
                   style: GoogleFonts.poppins(
-                      fontSize: 12, color: Colors.grey.shade600)),
-              isEditing
-                  ? TextFormField(
-                      controller: controller,
-                      decoration: const InputDecoration(
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
-                          border: InputBorder.none),
-                    )
-                  : Text(
-                      controller.text.isEmpty
-                          ? 'Not specified'
-                          : controller.text,
-                      style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          color: controller.text.isEmpty
-                              ? Colors.grey.shade400
-                              : null),
-                    ),
+                      fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+              Text(
+                value.isEmpty ? 'Not specified' : value,
+                style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: isPrimary ? FontWeight.w600 : FontWeight.w500,
+                    color: value.isEmpty
+                        ? Colors.grey.shade400
+                        : premiumDarkBlue),
+              ),
             ],
           ),
         ),
       ],
-    );
-  }
-
-  InputDecoration _inputDecoration(
-      {required String hintText, required bool isEditing}) {
-    return InputDecoration(
-      hintText: hintText,
-      filled: !isEditing,
-      fillColor: Colors.grey[100],
-      contentPadding: const EdgeInsets.all(16),
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-            color: isEditing ? Colors.grey.shade300 : Colors.transparent),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2),
-      ),
     );
   }
 }

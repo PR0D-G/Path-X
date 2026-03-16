@@ -687,4 +687,15 @@ class JobService {
   static Future<Job?> getJobByTitle(String title) async {
     return null;
   }
+
+  static Future<void> resetCareerProgress() async {
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+    if (user != null) {
+      await supabase
+          .from('user_learning_progress')
+          .delete()
+          .eq('user_id', user.id);
+    }
+  }
 }

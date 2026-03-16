@@ -9,8 +9,11 @@ class GeminiService {
   static GenerativeModel get model {
     if (_model == null) {
       final apiKey = dotenv.env['GEMINI_API_KEY'];
-      if (apiKey == null || apiKey.isEmpty || apiKey == 'YOUR_GEMINI_API_KEY_HERE') {
-        throw Exception('GEMINI_API_KEY is missing or invalid in .env file. Please add your real key from Google AI Studio.');
+      if (apiKey == null ||
+          apiKey.isEmpty ||
+          apiKey == 'YOUR_GEMINI_API_KEY_HERE') {
+        throw Exception(
+            'GEMINI_API_KEY is missing or invalid in .env file. Please add your real key from Google AI Studio.');
       }
       _model = GenerativeModel(
         model: 'gemini-2.5-flash',
@@ -18,6 +21,23 @@ class GeminiService {
       );
     }
     return _model!;
+  }
+
+  /// Robustly extracts JSON even if the AI includes extra text
+  static dynamic _parseJson(String text) {
+    try {
+      String cleanText = text.trim();
+      if (cleanText.contains('```json')) {
+        cleanText = cleanText.split('```json')[1].split('```')[0].trim();
+      } else if (cleanText.contains('```')) {
+        cleanText = cleanText.split('```')[1].split('```')[0].trim();
+      }
+      return json.decode(cleanText);
+    } catch (e) {
+      debugPrint('JSON Syntax Error: $e\nOriginal Text: $text');
+      // Clean up common AI weirdness like trailing commas
+      rethrow;
+    }
   }
 
   /// Analyzes a resume against a job description or target role
@@ -51,18 +71,16 @@ class GeminiService {
     try {
       final content = [Content.text(prompt)];
       final response = await model.generateContent(content);
-      
+
       final text = response.text;
       if (text == null) throw Exception('Empty response from Gemini');
-      
-      // Extract JSON if there's markdown formatting
-      final jsonString = text.contains('```json') 
-          ? text.split('```json')[1].split('```')[0].trim()
-          : text.trim();
-          
-      return json.decode(jsonString) as Map<String, dynamic>;
+
+      return _parseJson(text) as Map<String, dynamic>;
     } catch (e) {
       debugPrint('Gemini Error (analyzeResume): $e');
+      if (e.toString().contains('not found')) {
+        debugPrint('TIP: "gemini-1.5-flash" not found. This usually means the API key is not connected to a project with this model enabled.');
+      }
       rethrow;
     }
   }
@@ -73,7 +91,8 @@ class GeminiService {
     required String targetRole,
     bool isSummary = true,
   }) async {
-    final type = isSummary ? 'professional summary' : 'work experience bullet points';
+    final type =
+        isSummary ? 'professional summary' : 'work experience bullet points';
     final prompt = '''
     Task: Generate a $type for a resume.
     Target Role: $targetRole
@@ -121,10 +140,64 @@ class GeminiService {
     try {
       final content = [Content.text(prompt)];
       final response = await model.generateContent(content);
-      return response.text?.trim() ?? 'Matches your unique profile and career goals.';
+      return response.text?.trim() ??
+          'Great fit for your background and skill set.';
     } catch (e) {
       debugPrint('Gemini Error (getRecommendationInsights): $e');
       return 'Great fit for your background and skill set.';
+    }
+  }
+
+  /// Validates a certificate against a user's name and extracts skills
+  static Future<Map<String, dynamic>> validateCertificate({
+    required String userName,
+    required Uint8List bytes,
+    required String mimeType,
+  }) async {
+    final prompt = '''
+    Context: You are a verification assistant for a career platform.
+    Task: Validate the following certificate.
+    
+    Expected Recipient Name: "$userName"
+    
+    Please analyze the attached file and provide results in this JSON format:
+    {
+      "isAuthentic": (boolean, true if it looks like a real certificate and the name matches exactly or very closely),
+      "nameOnCertificate": (string, the name you found on the certificate),
+      "extractedSkills": [(list of strings, technical or soft skills mentioned in the certificate)],
+      "issuingOrganization": (string, name of the institution that issued it),
+      "errorMsg": (string, explain why it failed if isAuthentic is false)
+    }
+    
+    Validation Rules:
+    1. The name on the certificate MUST match "$userName". Slight variations/middle names are okay.
+    2. If the file is not a certificate, isAuthentic should be false.
+    
+    Return ONLY the JSON.
+    ''';
+
+    try {
+      final content = [
+        Content.multi([
+          TextPart(prompt),
+          DataPart(mimeType, bytes),
+        ])
+      ];
+
+      final response = await model.generateContent(content);
+      final text = response.text;
+      if (text == null) throw Exception('Empty response from Gemini');
+
+      return _parseJson(text) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('Gemini Error (validateCertificate): $e');
+      if (e.toString().contains('not found')) {
+        debugPrint('TIP: "gemini-1.5-flash-latest" not found. Please ensure:');
+        debugPrint('1. Your API key in .env matches the project in your screenshot.');
+        debugPrint('2. You are not using a restricted key that blocks this API.');
+        debugPrint('3. Try visiting https://aistudio.google.com/ to get a direct API key if GCP settings persist with errors.');
+      }
+      rethrow;
     }
   }
 }

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 import '../models/job_model.dart';
 import '../services/job_service.dart';
+import '../providers/auth_provider.dart';
 
 class LearningPathScreen extends StatefulWidget {
   const LearningPathScreen({super.key});
@@ -31,14 +33,30 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final args =
           ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
       if (args != null && args['job'] != null) {
         job = args['job'] as Job;
         _loadData();
       } else {
-        setState(() => _isLoading = false);
+        // Check if user has a selected career goal
+        final authProvider = Provider.of<AppAuthProvider>(context, listen: false);
+        final careerGoal = authProvider.userProfile?.careerGoal;
+        
+        if (careerGoal != null && careerGoal.isNotEmpty) {
+           setState(() => _isLoading = true);
+           // Try to find the job object for this goal
+           final jobs = await JobService.getMatchedCareers(authProvider.userSkills);
+           final matchedJob = jobs.firstWhere(
+             (j) => j.roleTitle.toLowerCase() == careerGoal.toLowerCase(),
+             orElse: () => jobs.isNotEmpty ? jobs.first : Job(roleTitle: careerGoal, coreSkills: []),
+           );
+           job = matchedJob;
+           _loadData();
+        } else {
+          setState(() => _isLoading = false);
+        }
       }
     });
   }
@@ -197,16 +215,136 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
           color: premiumBackground,
         ),
         child: SafeArea(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            itemCount: _steps.length,
-            itemBuilder: (context, index) {
-              return _buildTimelineStep(_steps[index], index == _steps.length - 1);
-            },
+          child: Column(
+            children: [
+              if (job != null) _buildSelectionHeader(),
+              _buildDisclaimerBanner(),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  itemCount: _steps.length,
+                  itemBuilder: (context, index) {
+                    return _buildTimelineStep(_steps[index], index == _steps.length - 1);
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildDisclaimerBanner() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade200.withOpacity(0.5)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Notice: These paths and resource links are prototypes and mostly placeholders. Direct functionality is still under verification.',
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                color: Colors.orange.shade900,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectionHeader() {
+    final authProvider = Provider.of<AppAuthProvider>(context);
+    final isSelected = authProvider.userProfile?.careerGoal == job?.roleTitle;
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isSelected ? Colors.green.shade50 : premiumCardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: isSelected ? Colors.green.shade200 : premiumGold.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isSelected ? 'Current Career Goal' : 'Interested in this path?',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? Colors.green.shade700 : premiumGold,
+                  ),
+                ),
+                Text(
+                  job!.roleTitle,
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: premiumDarkBlue,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (!isSelected)
+            ElevatedButton(
+              onPressed: () => _selectCareerGoal(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: premiumGold,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: Text(
+                'Select Path',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          else
+            const Icon(Icons.check_circle, color: Colors.green, size: 30),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _selectCareerGoal() async {
+    if (job == null) return;
+    
+    setState(() => _isLoading = true);
+    await Provider.of<AppAuthProvider>(context, listen: false).selectCareer(job!.roleTitle);
+    setState(() => _isLoading = false);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Career goal set to ${job!.roleTitle}!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   Widget _buildTimelineStep(LearningPath step, bool isLast) {
