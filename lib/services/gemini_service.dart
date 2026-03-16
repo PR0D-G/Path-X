@@ -16,7 +16,7 @@ class GeminiService {
             'GEMINI_API_KEY is missing or invalid in .env file. Please add your real key from Google AI Studio.');
       }
       _model = GenerativeModel(
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash-latest',
         apiKey: apiKey,
       );
     }
