@@ -1,29 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class GeminiService {
-  static GenerativeModel? _model;
-
-  static GenerativeModel get model {
-    if (_model == null) {
-      const String envKey = String.fromEnvironment('GEMINI_API_KEY');
-      final apiKey = envKey.isNotEmpty ? envKey : dotenv.env['GEMINI_API_KEY'];
-
-      if (apiKey == null ||
-          apiKey.isEmpty ||
-          apiKey == 'YOUR_GEMINI_API_KEY_HERE') {
-        throw Exception(
-            'GEMINI_API_KEY is missing or invalid. Please add your real key from Google AI Studio via .env or --dart-define.');
-      }
-      _model = GenerativeModel(
-        model: 'gemini-2.5-flash',
-        apiKey: apiKey,
-      );
-    }
-    return _model!;
-  }
+  static final _client = Supabase.instance.client;
 
   /// Robustly extracts JSON even if the AI includes extra text
   static dynamic _parseJson(String text) {
@@ -37,7 +17,25 @@ class GeminiService {
       return json.decode(cleanText);
     } catch (e) {
       debugPrint('JSON Syntax Error: $e\nOriginal Text: $text');
-      // Clean up common AI weirdness like trailing commas
+      rethrow;
+    }
+  }
+
+  /// Helper to call the Supabase Edge Function
+  static Future<dynamic> _callEdgeFunction(Map<String, dynamic> body) async {
+    try {
+      final response = await _client.functions.invoke(
+        'gemini',
+        body: body,
+      );
+
+      if (response.status != 200) {
+        throw Exception('Edge Function Error: ${response.data}');
+      }
+
+      return response.data;
+    } catch (e) {
+      debugPrint('Supabase Function Error: $e');
       rethrow;
     }
   }
@@ -71,19 +69,13 @@ class GeminiService {
     ''';
 
     try {
-      final content = [Content.text(prompt)];
-      final response = await model.generateContent(content);
-
-      final text = response.text;
-      if (text == null) throw Exception('Empty response from Gemini');
+      final data = await _callEdgeFunction({'prompt': prompt});
+      final text = data['response'] as String?;
+      if (text == null) throw Exception('Empty response from proxy');
 
       return _parseJson(text) as Map<String, dynamic>;
     } catch (e) {
       debugPrint('Gemini Error (analyzeResume): $e');
-      if (e.toString().contains('not found')) {
-        debugPrint(
-            'TIP: "gemini-1.5-flash" not found. This usually means the API key is not connected to a project with this model enabled.');
-      }
       rethrow;
     }
   }
@@ -112,9 +104,8 @@ class GeminiService {
     ''';
 
     try {
-      final content = [Content.text(prompt)];
-      final response = await model.generateContent(content);
-      return response.text?.trim() ?? 'Failed to generate content.';
+      final data = await _callEdgeFunction({'prompt': prompt});
+      return data['response']?.trim() ?? 'Failed to generate content.';
     } catch (e) {
       debugPrint('Gemini Error (generateResumeContent): $e');
       return 'Error generating content with AI.';
@@ -141,9 +132,8 @@ class GeminiService {
     ''';
 
     try {
-      final content = [Content.text(prompt)];
-      final response = await model.generateContent(content);
-      return response.text?.trim() ??
+      final data = await _callEdgeFunction({'prompt': prompt});
+      return data['response']?.trim() ??
           'Great fit for your background and skill set.';
     } catch (e) {
       debugPrint('Gemini Error (getRecommendationInsights): $e');
@@ -180,30 +170,34 @@ class GeminiService {
     ''';
 
     try {
-      final content = [
-        Content.multi([
-          TextPart(prompt),
-          DataPart(mimeType, bytes),
-        ])
-      ];
+      // Use the 'contents' format for multi-part requests (text + file)
+      final body = {
+        'contents': [
+          {
+            'parts': [
+              {'text': prompt},
+              {
+                'inline_data': {
+                  'mime_type': mimeType,
+                  'data': base64Encode(bytes),
+                }
+              }
+            ]
+          }
+        ]
+      };
 
-      final response = await model.generateContent(content);
-      final text = response.text;
-      if (text == null) throw Exception('Empty response from Gemini');
+      final data = await _callEdgeFunction(body);
+      
+      // If we used 'contents', the proxy returns the full Gemini response
+      final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] as String?;
+      if (text == null) throw Exception('Empty response from proxy');
 
       return _parseJson(text) as Map<String, dynamic>;
     } catch (e) {
       debugPrint('Gemini Error (validateCertificate): $e');
-      if (e.toString().contains('not found')) {
-        debugPrint('TIP: "gemini-1.5-flash-latest" not found. Please ensure:');
-        debugPrint(
-            '1. Your API key in .env matches the project in your screenshot.');
-        debugPrint(
-            '2. You are not using a restricted key that blocks this API.');
-        debugPrint(
-            '3. Try visiting https://aistudio.google.com/ to get a direct API key if GCP settings persist with errors.');
-      }
       rethrow;
     }
   }
 }
+
