@@ -8,15 +8,17 @@ class GeminiService {
 
   static GenerativeModel get model {
     if (_model == null) {
-      final apiKey = dotenv.env['GEMINI_API_KEY'];
+      const String envKey = String.fromEnvironment('GEMINI_API_KEY');
+      final apiKey = envKey.isNotEmpty ? envKey : dotenv.env['GEMINI_API_KEY'];
+
       if (apiKey == null ||
           apiKey.isEmpty ||
           apiKey == 'YOUR_GEMINI_API_KEY_HERE') {
         throw Exception(
-            'GEMINI_API_KEY is missing or invalid in .env file. Please add your real key from Google AI Studio.');
+            'GEMINI_API_KEY is missing or invalid. Please add your real key from Google AI Studio via .env or --dart-define.');
       }
       _model = GenerativeModel(
-        model: 'gemini-1.5-flash-latest',
+        model: 'gemini-2.5-flash',
         apiKey: apiKey,
       );
     }
@@ -79,7 +81,8 @@ class GeminiService {
     } catch (e) {
       debugPrint('Gemini Error (analyzeResume): $e');
       if (e.toString().contains('not found')) {
-        debugPrint('TIP: "gemini-1.5-flash" not found. This usually means the API key is not connected to a project with this model enabled.');
+        debugPrint(
+            'TIP: "gemini-1.5-flash" not found. This usually means the API key is not connected to a project with this model enabled.');
       }
       rethrow;
     }
@@ -193,9 +196,12 @@ class GeminiService {
       debugPrint('Gemini Error (validateCertificate): $e');
       if (e.toString().contains('not found')) {
         debugPrint('TIP: "gemini-1.5-flash-latest" not found. Please ensure:');
-        debugPrint('1. Your API key in .env matches the project in your screenshot.');
-        debugPrint('2. You are not using a restricted key that blocks this API.');
-        debugPrint('3. Try visiting https://aistudio.google.com/ to get a direct API key if GCP settings persist with errors.');
+        debugPrint(
+            '1. Your API key in .env matches the project in your screenshot.');
+        debugPrint(
+            '2. You are not using a restricted key that blocks this API.');
+        debugPrint(
+            '3. Try visiting https://aistudio.google.com/ to get a direct API key if GCP settings persist with errors.');
       }
       rethrow;
     }

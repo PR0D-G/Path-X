@@ -20,10 +20,14 @@ void main() async {
     print("Warning: Failed to load .env file. $e");
   }
 
+  // Supabase Configuration (Support for --dart-define)
+  const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  const String supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
   // Initialize Supabase
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL'] ?? '',
-    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
+    url: supabaseUrl.isNotEmpty ? supabaseUrl : (dotenv.env['SUPABASE_URL'] ?? ''),
+    anonKey: supabaseAnonKey.isNotEmpty ? supabaseAnonKey : (dotenv.env['SUPABASE_ANON_KEY'] ?? ''),
   );
 
   runApp(const MyApp());
