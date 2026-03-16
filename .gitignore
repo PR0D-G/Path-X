@@ -1,5 +1,22 @@
-# Environment variables
+# Environment and Secrets
 .env
+.env*
+!.env.example
+*.env
+*.env.*
+**/assets/.env
+**/web/assets/.env
+
+# Keys and Credentials
+*.jks
+*.p12
+*.key
+*.pem
+google-services.json
+GoogleService-Info.plist
+*secret*
+*key*
+!pubspec.lock
 
 # Miscellaneous
 *.class
