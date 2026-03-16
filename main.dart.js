@@ -34369,7 +34369,7 @@ aif(){var s,r=null,q=$.aZL
 if(q==null){s=$.ab9().gQ9().i(0,"GEMINI_API_KEY")
 if(s==null||s.length===0||s==="YOUR_GEMINI_API_KEY_HERE")throw A.c(A.d9("GEMINI_API_KEY is missing or invalid in .env file. Please add your real key from Google AI Studio."))
 q=A.bib("https","generativelanguage.googleapis.com","v1beta",r)
-q=$.aZL=new A.aih(A.bbU("gemini-2.5-flash"),B.Sj,r,r,new A.ajX(s,r),q,r,r)}return q},
+q=$.aZL=new A.aih(A.bbU("gemini-1.5-flash-latest"),B.Sj,r,r,new A.ajX(s,r),q,r,r)}return q},
 aZM(a){var s,r,q,p,o="```"
 try{s=B.c.bU(a)
 if(J.eF(s,"```json"))s=B.c.bU(J.D1(s,"```json")[1].split(o)[0])
