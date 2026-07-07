@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Path-X | AI Career Presentation</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="presentation-container">
+        <!-- Slide 1: Title -->
+        <div class="slide active" id="slide-1">
+            <div class="slide-content">
+                <div class="slide-text">
+                    <h1>Path-X</h1>
+                    <h2>Your AI-Powered Career Navigator</h2>
+                    <p>Empowering the next generation of professionals with personalized AI insights.</p>
+                </div>
+                <div class="slide-image floating">
+                    <img src="assets/hero.png" alt="Path-X Hero">
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 2: The Career Dilemma -->
+        <div class="slide" id="slide-2">
+            <h1>The Career Dilemma</h1>
+            <ul>
+                <li>Information overload in the modern job market.</li>
+                <li>Difficulty identifying the "Right Fit" career path.</li>
+                <li>Skills gap between academia and industry requirements.</li>
+                <li>Ineffective manual resume tailoring.</li>
+            </ul>
+        </div>
+
+        <!-- Slide 3: Introduction -->
+        <div class="slide" id="slide-3">
+            <h1>What is Path-X?</h1>
+            <p>A comprehensive career ecosystem that bridges the gap between talent and opportunity using Google Gemini AI.</p>
+            <ul>
+                <li>Integrated Resume Analysis & Building.</li>
+                <li>Dynamic Career Roadmaps.</li>
+                <li>Intelligent Job Recommendations.</li>
+            </ul>
+        </div>
+
+        <!-- Slide 4: Tech Stack -->
+        <div class="slide" id="slide-4">
+            <h1>Technical Foundation</h1>
+            <div class="slide-content">
+                <div class="slide-text">
+                    <ul>
+                        <li><strong>Frontend:</strong> Flutter (Cross-platform Performance)</li>
+                        <li><strong>Backend:</strong> Supabase (PostgreSQL & Realtime)</li>
+                        <li><strong>AI Engine:</strong> Google Gemini API</li>
+                        <li><strong>State:</strong> Provider Pattern</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: Resume Scanner -->
+        <div class="slide" id="slide-5">
+            <h1>Intelligent Resume Analyzer</h1>
+            <div class="slide-content">
+                <div class="slide-text">
+                    <p>Harnessing NLP to decode your professional journey.</p>
+                    <ul>
+                        <li>AI-powered Skill Extraction.</li>
+                        <li>Real-time <strong>ATS Match Score</strong>.</li>
+                        <li>Optimization suggestions for target roles.</li>
+                    </ul>
+                </div>
+                <div class="slide-image">
+                    <div style="padding: 20px; text-align: center; color: var(--text-dim);">
+                        [Resume Scanner UI Preview]
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Certificate Validation -->
+        <div class="slide" id="slide-6">
+            <h1>Certificate Validation</h1>
+            <div class="slide-content">
+                <div class="slide-text">
+                    <p>Building trust through AI verification.</p>
+                    <ul>
+                        <li>Instant certificate authenticity checks.</li>
+                        <li>Automated skill extraction from credentials.</li>
+                        <li>Verified profile badges for industry credibility.</li>
+                    </ul>
+                </div>
+                <div class="slide-image">
+                    <div style="background: var(--grad-primary); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                        VERIFIED CERTIFICATE
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Job Matching -->
+        <div class="slide" id="slide-7">
+            <h1>AI Job Matching</h1>
+            <div class="slide-content">
+                <div class="slide-text">
+                    <p>Directly mapping your skills to the global job market.</p>
+                    <ul>
+                        <li>Deep personality and skill analysis.</li>
+                        <li>Predictive job fit scores.</li>
+                        <li>Personalized "Match Insights" via Gemini.</li>
+                    </ul>
+                </div>
+                <div class="slide-image">
+                    <img src="assets/matching.png" alt="Job Matching">
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Learning Paths -->
+        <div class="slide" id="slide-8">
+            <h1>Personalized Learning</h1>
+            <div class="slide-content">
+                <div class="slide-text">
+                    <p>Bridging the gap between where you are and where you want to be.</p>
+                    <ul>
+                        <li>Step-by-step career roadmaps.</li>
+                        <li>Curated content recommendations.</li>
+                        <li>Progress tracking & milestones.</li>
+                    </ul>
+                </div>
+                <div class="slide-image">
+                    <img src="assets/roadmap.png" alt="Roadmap">
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 9: Future Roadmap -->
+        <div class="slide" id="slide-9">
+            <h1>The Future of Path-X</h1>
+            <ul>
+                <li>LinkedIn & GitHub API integrations.</li>
+                <li>AI-Powered Mock Interviews.</li>
+                <li>Industry Mentor Connection Hub.</li>
+                <li>Multi-language Voice Support.</li>
+            </ul>
+        </div>
+
+        <!-- Slide 10: Conclusion -->
+        <div class="slide" id="slide-10">
+            <div style="text-align: center; width: 100%;">
+                <h1>Thank You</h1>
+                <p>Ready to navigate the future of work?</p>
+                <div style="margin-top: 40px; font-size: 1.2rem; color: var(--secondary);">Questions?</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div class="control-btn" onclick="prevSlide()">←</div>
+        <div class="control-btn" onclick="nextSlide()">→</div>
+    </div>
+
+    <div id="progress-bar"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
